@@ -6,6 +6,13 @@ This is a **proposed implementation file map** for the approved first slice.
 ## Important note
 There is no application source scaffold in the current workspace, so this file map is intentionally framework-agnostic and organized by responsibility rather than by an existing code tree.
 
+For V1 implementation, this file map is the normative scaffold assumption:
+- application code under `src/`
+- tests under `tests/`
+- docs under `docs/`
+
+Any future framework-specific relocation should preserve these responsibility boundaries.
+
 ## Files to create
 
 ### Backend domain and persistence
@@ -31,7 +38,7 @@ There is no application source scaffold in the current workspace, so this file m
 
 - `src/domain/jobs/job.model.*`
   - Purpose: one-time job entity shape and mapping
-  - Dependency notes: depends on customer and optional customer address reference; must exclude recurrence and invoice fields in V1
+  - Dependency notes: depends on customer and optional customer address reference; persists `scheduleState` and nullable assignee only; must exclude recurrence and invoice fields in V1
 
 - `src/db/migrations/<timestamp>-create-customers.*`
   - Purpose: create customer table/collection
@@ -101,7 +108,7 @@ There is no application source scaffold in the current workspace, so this file m
 
 - `src/services/jobs/unschedule-job.*`
   - Purpose: clear one-time schedule on a job
-  - Dependency notes: must follow documented V1 unschedule behavior
+  - Dependency notes: must clear schedule fields only and preserve assignee in V1
 
 - `src/services/jobs/assign-job.*`
   - Purpose: assign a job to one active team member
@@ -122,7 +129,7 @@ There is no application source scaffold in the current workspace, so this file m
 
 - `src/validation/jobs/job-input.validator.*`
   - Purpose: validate job create input for V1 one-time jobs
-  - Dependency notes: explicitly exclude recurrence/billing fields
+  - Dependency notes: explicitly reject recurrence, occurrence, invoice, payment, billing, and auto-invoice fields
 
 - `src/validation/jobs/schedule-job.validator.*`
   - Purpose: validate schedule action input
@@ -242,6 +249,10 @@ There is no application source scaffold in the current workspace, so this file m
 - `docs/architecture/state-transitions.md`
   - Purpose: document the final V1 decision for unschedule behavior and minimal job state dimensions
   - Dependency notes: keep non-V1 sections clearly future-facing
+
+- `docs/architecture/v1-implementation-defaults.md`
+  - Purpose: authoritative V1 default decisions for scaffold, state model, unschedule behavior, and unsupported-field policy
+  - Dependency notes: keep synced with implementation review and tests
 
 ## Dependency notes summary
 - Customer is foundational for Job.

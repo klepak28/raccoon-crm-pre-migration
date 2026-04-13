@@ -161,12 +161,15 @@ Build the smallest coherent operational slice that supports:
 
 ## V1 domain constraints
 - Job is **one-time only**.
-- Job may be `Unscheduled` or `Scheduled`.
-- Job may be `Unassigned` or assigned to one team member.
+- Persisted job schedule state is exactly `unscheduled|scheduled`.
+- Assignment is represented by nullable `assigneeTeamMemberId`; assigned vs `Unassigned` is derived from that field.
+- Job may be assigned to at most one team member in V1.
 - `Unassigned` is a pseudo-resource bucket, not a team member.
+- Unscheduling clears schedule fields only and preserves current assignee.
 - Schedule view only needs to represent one-time jobs.
 - No recurring fields or recurrence UI are exposed in V1.
 - No invoice creation paths are exposed in V1.
+- Unsupported recurrence/invoice/billing fields are rejected explicitly in V1 handlers.
 
 ---
 
@@ -275,15 +278,19 @@ Include:
 
 ## Validations
 ### Customer validations
-- at least minimal name/display identity is required
+- customer create/update requires either `displayName` or `firstName`
+- if `displayName` is omitted, display text is derived from available name/company fields
 - phone may warn if invalid
+- email uses basic syntactic validation
 - state must be valid US abbreviation if entered
 - business-only subcontractor option is only shown for business type if included at all
 - tags normalize to chips/list values
 
 ### Job validations
 - job must belong to a customer
+- selected address must belong to that customer
 - job must be marked one-time in V1 by construction
+- unsupported recurrence/invoice/billing fields are rejected explicitly
 
 ### Schedule validations
 - scheduling requires start and end date/time
@@ -362,9 +369,10 @@ And the system does all of this without introducing recurrence or invoice behavi
 
 ### Risk 1: job status model gets polluted too early
 #### Mitigation
-Use only the minimum state dimensions needed in V1:
-- schedule state: unscheduled/scheduled
-- assignment state: unassigned/assigned
+Use only the minimum persisted state needed in V1:
+- schedule state: `unscheduled|scheduled`
+- assignee reference: nullable `assigneeTeamMemberId`
+Derive assigned/unassigned from assignee presence.
 Do not add invoice/commercial states.
 
 ### Risk 2: hidden recurrence fields leak into V1 model

@@ -17,6 +17,14 @@ Explicitly excluded:
 This plan does **not** rely on `/docs/api/*` because those files are not present in the workspace.
 API/actions below are the minimum needed for this slice only.
 
+## Scaffold assumption
+Because no app scaffold currently exists in the workspace, implementation assumes a new single-repo application rooted here with:
+- `src/` for code
+- `tests/` for tests
+- `docs/` for planning and architecture
+
+Within that scaffold, the proposed file map is the normative V1 structure unless intentionally superseded later.
+
 ## Goal
 Deliver the smallest reviewable implementation that supports:
 1. create customer
@@ -107,11 +115,13 @@ Deliver the smallest reviewable implementation that supports:
   - private notes / tags only if needed by current UI
   - schedule state
   - scheduled start/end
-  - assignment state / assignee reference
+  - assignee reference
 - expose job detail read
 - expose minimal update path for V1 metadata if needed
 
 #### Constraints
+- persist `scheduleState: unscheduled|scheduled`
+- derive assigned vs unassigned from nullable assignee reference
 - no recurrence fields
 - no occurrence/series linkage
 - no invoice linkage
@@ -343,18 +353,19 @@ Deliver the smallest reviewable implementation that supports:
 ## Validation logic
 
 ### Customer create/update validations
-- require enough fields to derive a usable customer identity:
-  - recommended minimum: first name or display name
+- require either `displayName` or `firstName`
+- if `displayName` is omitted, derive display text from available name/company fields
 - validate `customer_type` enum
 - validate state against US abbreviation list when provided
 - validate email syntax minimally
-- validate phone format minimally and return warning/error per product choice
+- validate phone format minimally with warning-style UI and lenient backend acceptance
 - trim and dedupe tags if tags are included
 
 ### Job validations
 - customer must exist
 - selected address must belong to the customer if address is stored on job
 - one-time job creation path must not accept recurrence input
+- V1 handlers reject unsupported recurrence, occurrence, invoice, payment, billing, and auto-invoice fields explicitly
 
 ### Schedule validations
 - job must exist
@@ -367,8 +378,8 @@ Deliver the smallest reviewable implementation that supports:
 - assignee id may be null for `Unassigned`
 - non-null assignee id must resolve to active assignable team member
 
-### Ambiguity note
-- source docs do not fully settle whether unscheduling clears assignment, so V1 should choose one behavior and document it clearly before implementation review. Current safest option: unscheduling clears only schedule fields and preserves assignee selection, unless product review decides otherwise.
+### V1 default note
+- unscheduling clears only schedule fields and preserves assignee selection
 
 ---
 
@@ -439,19 +450,22 @@ Focus on:
 ---
 
 ## Documentation updates required
-- update implementation notes for V1 state model:
-  - schedule state only
-  - assignment state only
-- document the temporary decision on unschedule behavior
+- document the final V1 state model:
+  - persisted `scheduleState` only
+  - assigned/unassigned derived from nullable assignee reference
+- document unschedule preserving assignee
 - document that recurrence and invoicing are intentionally absent from V1
+- document that unsupported out-of-slice fields are rejected explicitly
 - document any chosen minimal API route contract once code exists
 
 ---
 
-## Ambiguities to keep explicit
-- unschedule preserving vs clearing assignment remains an open product decision in source docs
-- exact customer identity minimum is not fully specified, so implementation should choose and document one minimal rule
-- multi-address selection behavior is under-specified, so V1 should use one explicit selected address on the job and avoid broader address-priority behavior
+## Explicit V1 defaults to keep visible
+- unschedule preserves assignment and clears only schedule fields
+- customer identity minimum is `displayName` or `firstName`
+- multi-address behavior stays narrow: the job stores one explicit selected customer-owned address
+- assignment cardinality is one concrete assignee or `Unassigned`
+- unsupported recurrence/invoice/billing fields are rejected explicitly
 
 ---
 

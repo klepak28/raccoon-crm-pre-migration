@@ -25,14 +25,16 @@ Use layered testing so the slice stays small and reviewable:
 ## Unit tests
 
 ### Customer validation tests
-- creates valid customer with minimum accepted identity fields
+- creates valid customer with `displayName` only
+- creates valid customer with `firstName` only
+- rejects customer create when both `displayName` and `firstName` are missing
 - rejects invalid customer type
 - accepts homeowner customer
 - accepts business customer
 - shows/handles subcontractor flag only for business if that field is implemented
 - validates state abbreviation when provided
-- rejects malformed email when strict validation is chosen
-- warns/rejects malformed phone based on chosen validation policy
+- rejects clearly malformed email
+- accepts phone input leniently while exposing warning behavior in UI where applicable
 - trims and normalizes tags
 
 ### Customer persistence/service tests
@@ -52,14 +54,15 @@ Use layered testing so the slice stays small and reviewable:
 - creates one-time job for existing customer
 - rejects job creation for missing customer
 - rejects address reference that does not belong to customer
-- ignores or rejects recurrence fields if supplied
-- stores initial state as unscheduled and unassigned unless otherwise specified by action
+- rejects recurrence, occurrence, invoice, payment, billing, and auto-invoice fields if supplied
+- stores initial state as `scheduleState=unscheduled` and `assigneeTeamMemberId=null` unless otherwise specified by action
 
 ### Schedule service tests
 - schedules one-time job with valid start/end
 - rejects scheduling when end <= start
 - rejects scheduling when customer is `doNotService`
-- unschedules scheduled job
+- unschedules scheduled job by clearing schedule fields only
+- unscheduling preserves assignee when one exists
 - unscheduling an already-unscheduled job is either idempotent or rejected according to chosen API behavior, but must be documented and tested
 
 ### Assignment service tests
@@ -67,6 +70,8 @@ Use layered testing so the slice stays small and reviewable:
 - rejects inactive or unknown team member
 - unassigns job back to `Unassigned`
 - preserves one-assignee-only rule in V1
+- reassignment replaces existing assignee rather than appending
+- rejects any multi-assignee payload or representation
 
 ### Day-schedule query tests
 - returns empty day schedule with lanes present
@@ -140,10 +145,10 @@ Use layered testing so the slice stays small and reviewable:
 - customer with tags but no notes
 
 ### Job and schedule edge cases
-- schedule job crossing day boundaries if supported by the slice, otherwise reject and test rejection explicitly
-- two jobs assigned to same team member with overlapping times, if overlap is allowed in V1, verify both render; if not allowed, document and test rejection explicitly
-- unschedule job with existing assignee, verify chosen V1 behavior
-- assign job before scheduling, if allowed by implementation, verify later scheduling works; if not allowed, document and test rejection explicitly
+- schedule job crossing day boundaries, verify selected-day inclusion by interval intersection
+- two jobs assigned to same team member with overlapping times, verify both render deterministically
+- unschedule job with existing assignee, verify schedule fields clear and assignee remains
+- assign job before scheduling, verify later scheduling works
 
 ### Scheduler edge cases
 - empty day with no scheduled jobs still renders lanes
@@ -176,7 +181,8 @@ Use layered testing so the slice stays small and reviewable:
 - assign job to inactive team member
 - fetch day schedule with invalid date format
 - submit customer create with invalid enum values
-- submit excluded recurrence or invoice fields to V1 handlers and verify rejection or ignore policy
+- submit customer create without `displayName` and without `firstName`
+- submit excluded recurrence, occurrence, invoice, payment, billing, or auto-invoice fields to V1 handlers and verify explicit rejection
 
 ---
 
@@ -209,6 +215,7 @@ Use layered testing so the slice stays small and reviewable:
 ---
 
 ## Documentation/test alignment notes
-- whichever decision is taken for unschedule preserving vs clearing assignment must be reflected in tests and in slice docs
-- whichever validation posture is taken for phone formatting (warning vs hard error) must be reflected in tests
-- if overlapping schedules are allowed in V1, tests should assert deterministic rendering rather than rejection
+- tests must reflect the V1 default that unschedule preserves assignment while clearing schedule fields
+- tests must reflect the V1 phone posture: warning-style UI and lenient backend acceptance
+- overlapping schedules are allowed in V1, so tests should assert deterministic rendering rather than rejection
+- unsupported recurrence/invoice/billing fields must be tested as explicit validation failures
