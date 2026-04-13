@@ -1,6 +1,10 @@
+import { handleRoute } from './api/routes.js';
+import { createContext } from './bootstrap/create-context.js';
 import { maybeServeStatic, sendJson, sendText, toErrorPayload } from './lib/http.js';
 
 export function createApp({ staticRoot }) {
+  const context = createContext();
+
   return async function app(req, res) {
     try {
       const url = new URL(req.url, 'http://localhost');
@@ -11,6 +15,10 @@ export function createApp({ staticRoot }) {
 
       if (req.method === 'GET' && url.pathname === '/health') {
         sendJson(res, 200, { ok: true });
+        return;
+      }
+
+      if (await handleRoute({ req, res, url, context })) {
         return;
       }
 
