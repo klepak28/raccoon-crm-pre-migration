@@ -29,7 +29,7 @@ export async function handleRoute({ req, res, url, context }) {
     return true;
   }
 
-  if (req.method === 'GET' && (url.pathname === '/app/customers/list' || url.pathname === '/app/calendar_new')) {
+  if (req.method === 'GET' && (url.pathname === '/app/customers/list' || url.pathname === '/app/calendar_new' || matchRoute(req.method, url.pathname, '/app/jobs/:jobId'))) {
     sendHtml(res, 200, renderAppShell('CRM V1'));
     return true;
   }

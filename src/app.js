@@ -2,8 +2,7 @@ import { handleRoute } from './api/routes.js';
 import { createContext } from './bootstrap/create-context.js';
 import { maybeServeStatic, sendJson, sendText, toErrorPayload } from './lib/http.js';
 
-export function createApp({ staticRoot }) {
-  const context = createContext();
+export function createApp({ staticRoot, context = createContext() }) {
 
   return async function app(req, res) {
     try {
