@@ -18,10 +18,17 @@ test('buildSchedulerUrl preserves view, date, and optional filter', () => {
   );
 });
 
+test('buildSchedulerUrl preserves repeated lane filters', () => {
+  assert.equal(
+    buildSchedulerUrl({ view: 'day', date: '2026-04-14', lanes: ['unassigned', 'tm_0001'] }),
+    '/app/calendar_new?view=day&date=2026-04-14&lane=unassigned&lane=tm_0001',
+  );
+});
+
 test('buildDayUrl creates a focused day route', () => {
   assert.equal(
-    buildDayUrl('2026-04-15', 'vip'),
-    '/app/calendar_new?view=day&date=2026-04-15&filter=vip',
+    buildDayUrl('2026-04-15', 'vip', ['tm_0001']),
+    '/app/calendar_new?view=day&date=2026-04-15&filter=vip&lane=tm_0001',
   );
 });
 

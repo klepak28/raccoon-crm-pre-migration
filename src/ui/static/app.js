@@ -90,6 +90,7 @@ async function renderRoute() {
 function renderShell({ title, subtitle = '', nav = 'customers', breadcrumbs = [], actions = '', content = '' }) {
   const flashHtml = state.flash ? statusMessage(state.flash.message, state.flash.tone) : '';
   state.flash = null;
+  const globalNewJobHref = buildGlobalNewJobHref();
 
   app.innerHTML = `
     <div class="shell">
@@ -112,7 +113,30 @@ function renderShell({ title, subtitle = '', nav = 'customers', breadcrumbs = []
             <h1>${escapeHtml(title)}</h1>
             ${subtitle ? `<p class="page-subtitle">${escapeHtml(subtitle)}</p>` : ''}
           </div>
-          ${actions ? `<div class="page-actions">${actions}</div>` : ''}
+          <div class="page-actions shell-actions">
+            <div class="new-menu-shell">
+              <button class="button button-primary" id="global-new-toggle" type="button">New</button>
+              <div class="new-menu-panel" id="global-new-menu" hidden>
+                <a class="new-menu-item" href="${escapeHtml(globalNewJobHref)}" data-new-action="job">
+                  <strong>Job</strong>
+                  <span>Create a one-time job</span>
+                </a>
+                <button class="new-menu-item" type="button" data-new-action="recurring">
+                  <strong>Recurring job</strong>
+                  <span>Unsupported in V1</span>
+                </button>
+                <button class="new-menu-item" type="button" data-new-action="estimate">
+                  <strong>Estimate</strong>
+                  <span>Unsupported in V1</span>
+                </button>
+                <button class="new-menu-item" type="button" data-new-action="event">
+                  <strong>Event</strong>
+                  <span>Unsupported in V1</span>
+                </button>
+              </div>
+            </div>
+            ${actions}
+          </div>
         </header>
         ${flashHtml}
         <div id="page-content">${content}</div>
@@ -120,6 +144,38 @@ function renderShell({ title, subtitle = '', nav = 'customers', breadcrumbs = []
       </main>
     </div>
   `;
+
+  bindGlobalNewMenu();
+}
+
+function buildGlobalNewJobHref() {
+  const params = new URLSearchParams(location.search);
+  const date = location.pathname === '/app/calendar_new' ? params.get('date') || localToday() : '';
+  return buildNewJobUrl({ pathname: location.pathname, search: location.search, date });
+}
+
+function bindGlobalNewMenu() {
+  const toggle = document.getElementById('global-new-toggle');
+  const panel = document.getElementById('global-new-menu');
+  if (!toggle || !panel) return;
+
+  toggle.addEventListener('click', () => {
+    panel.hidden = !panel.hidden;
+  });
+
+  for (const item of panel.querySelectorAll('[data-new-action]')) {
+    item.addEventListener('click', (event) => {
+      const action = event.currentTarget.dataset.newAction;
+      if (action === 'job') {
+        panel.hidden = true;
+        return;
+      }
+
+      event.preventDefault();
+      panel.hidden = true;
+      showTransientPageNotice(`${capitalize(action)} is visible from the global New menu, but remains unsupported in V1.`, 'warning');
+    });
+  }
 }
 
 async function renderCustomersListPage() {
@@ -952,7 +1008,9 @@ async function renderSchedulerPage() {
     api.getScheduleRange(range.startDate, range.endDate),
     api.listJobs({ scheduleState: 'unscheduled' }),
   ]);
-  const filteredSchedule = filterSchedule(schedule, filter);
+  const selectedLaneIds = normalizeSelectedLaneIds(params.getAll('lane'), schedule.lanes);
+  const laneFilteredSchedule = filterScheduleByLaneSelection(schedule, selectedLaneIds);
+  const filteredSchedule = filterSchedule(laneFilteredSchedule, filter);
   const filteredUnscheduledJobs = filterJobs(unscheduledJobs, filter);
   const rangeLabel = formatRangeLabel(view, date);
   const summary = summarizeSchedule(filteredSchedule, range.startDate, range.endDate);
@@ -966,9 +1024,9 @@ async function renderSchedulerPage() {
       <div class="scheduler-actions">
         <a class="button button-primary" href="${buildNewJobUrl({ pathname: location.pathname, search: location.search, date })}">New job</a>
         <div class="view-switcher">
-          ${schedulerViewButton('day', view, date, filter)}
-          ${schedulerViewButton('week', view, date, filter)}
-          ${schedulerViewButton('month', view, date, filter)}
+          ${schedulerViewButton('day', view, date, filter, selectedLaneIds)}
+          ${schedulerViewButton('week', view, date, filter, selectedLaneIds)}
+          ${schedulerViewButton('month', view, date, filter, selectedLaneIds)}
         </div>
       </div>
     `,
@@ -987,9 +1045,9 @@ async function renderSchedulerPage() {
         </div>
         <div class="toolbar toolbar-between scheduler-toolbar">
           <div class="inline-actions">
-            <a class="button" href="${buildSchedulerUrl({ view, date: stepAnchorDay(view, date, -1), filter })}">Previous</a>
-            <a class="button" href="${buildSchedulerUrl({ view, date: localToday(), filter })}">Today</a>
-            <a class="button" href="${buildSchedulerUrl({ view, date: stepAnchorDay(view, date, 1), filter })}">Next</a>
+            <a class="button" href="${buildSchedulerUrl({ view, date: stepAnchorDay(view, date, -1), filter, lanes: selectedLaneIds })}">Previous</a>
+            <a class="button" href="${buildSchedulerUrl({ view, date: localToday(), filter, lanes: selectedLaneIds })}">Today</a>
+            <a class="button" href="${buildSchedulerUrl({ view, date: stepAnchorDay(view, date, 1), filter, lanes: selectedLaneIds })}">Next</a>
           </div>
           <form id="scheduler-jump-form" class="inline-actions compact-form">
             <label>
@@ -1004,10 +1062,14 @@ async function renderSchedulerPage() {
         <div class="scheduler-layout">
           <aside class="scheduler-rail">
             <div class="rail-card stack-gap">
+              <h2 class="section-title">Mini month</h2>
+              ${renderMiniMonthRail({ view, date, filter, selectedLaneIds })}
+            </div>
+            <div class="rail-card stack-gap">
               <h2 class="section-title">Scheduler focus</h2>
               <div class="rail-focus-date">${escapeHtml(formatRangeLabel('day', date))}</div>
               <div class="rail-copy">Drill into day view, scan the range, or filter by customer, service, or tag.</div>
-              <a class="button button-primary" href="${buildDayUrl(date, filter)}">Open focused day</a>
+              <a class="button button-primary" href="${buildDayUrl(date, filter, selectedLaneIds)}">Open focused day</a>
             </div>
             <div class="rail-card stack-gap">
               <h2 class="section-title">Filter by name or tag</h2>
@@ -1020,13 +1082,19 @@ async function renderSchedulerPage() {
                 <input type="hidden" name="date" value="${escapeHtml(date)}" />
                 <div class="inline-actions">
                   <button class="button button-primary" type="submit">Apply</button>
-                  ${filter ? `<a class="button button-ghost" href="${buildSchedulerUrl({ view, date })}">Clear</a>` : ''}
+                  ${filter ? `<a class="button button-ghost" href="${buildSchedulerUrl({ view, date, lanes: selectedLaneIds })}">Clear</a>` : ''}
                 </div>
               </form>
             </div>
             <div class="rail-card stack-gap">
+              <h2 class="section-title">Employees</h2>
+              <form id="scheduler-lane-filter-form" class="stack-gap compact-form">
+                ${renderLaneFilterOptions(schedule, selectedLaneIds)}
+              </form>
+            </div>
+            <div class="rail-card stack-gap">
               <h2 class="section-title">Range guide</h2>
-              ${renderRangeGuide(view, date, filteredSchedule, filter)}
+              ${renderRangeGuide(view, date, filteredSchedule, filter, selectedLaneIds)}
             </div>
             <div class="rail-card stack-gap">
               <h2 class="section-title">Needs scheduling</h2>
@@ -1050,7 +1118,7 @@ async function renderSchedulerPage() {
           </aside>
           <div class="scheduler-main">
             ${summary.totalJobs === 0 ? statusMessage(filter ? 'No jobs match the current filter in this range.' : 'No jobs are scheduled in this range yet.', 'warning') : ''}
-            <div id="scheduler-region">${renderSchedulerView({ view, date, schedule: filteredSchedule, filter })}</div>
+            <div id="scheduler-region">${renderSchedulerView({ view, date, schedule: filteredSchedule, filter, lanes: selectedLaneIds })}</div>
           </div>
         </div>
       </section>
@@ -1060,29 +1128,36 @@ async function renderSchedulerPage() {
   document.getElementById('scheduler-jump-form').addEventListener('submit', (event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    location.href = buildSchedulerUrl({ view: form.get('view'), date: form.get('date'), filter: form.get('filter') });
+    location.href = buildSchedulerUrl({ view: form.get('view'), date: form.get('date'), filter: form.get('filter'), lanes: selectedLaneIds });
   });
 
   document.getElementById('scheduler-filter-form').addEventListener('submit', (event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    location.href = buildSchedulerUrl({ view: form.get('view'), date: form.get('date'), filter: form.get('filter') });
+    location.href = buildSchedulerUrl({ view: form.get('view'), date: form.get('date'), filter: form.get('filter'), lanes: selectedLaneIds });
+  });
+
+  document.getElementById('scheduler-lane-filter-form').addEventListener('change', (event) => {
+    const form = new FormData(event.currentTarget);
+    const selected = normalizeSelectedLaneIds(form.getAll('lane'), schedule.lanes);
+    const nextLanes = selected.length === schedule.lanes.length ? [] : selected;
+    location.href = buildSchedulerUrl({ view, date, filter, lanes: nextLanes });
   });
 
   bindSchedulerQuickActions();
 }
 
-function renderSchedulerView({ view, date, schedule, filter }) {
+function renderSchedulerView({ view, date, schedule, filter, lanes = [] }) {
   if (view === 'day') {
-    return renderDaySchedulerView(date, schedule, filter);
+    return renderDaySchedulerView(date, schedule, filter, lanes);
   }
   if (view === 'week') {
-    return renderWeekSchedulerView(date, schedule, filter);
+    return renderWeekSchedulerView(date, schedule, filter, lanes);
   }
-  return renderMonthSchedulerView(date, schedule, filter);
+  return renderMonthSchedulerView(date, schedule, filter, lanes);
 }
 
-function renderDaySchedulerView(date, schedule, filter) {
+function renderDaySchedulerView(date, schedule, filter, lanes = []) {
   const jobsByLane = new Map(schedule.lanes.map((lane) => [lane.id, []]));
   for (const job of schedule.jobs) {
     if (jobDayKeys(job, date, date).includes(date)) {
@@ -1118,7 +1193,7 @@ function renderDaySchedulerView(date, schedule, filter) {
   `;
 }
 
-function renderWeekSchedulerView(date, schedule, filter) {
+function renderWeekSchedulerView(date, schedule, filter, lanes = []) {
   const start = startOfWeek(date);
   const end = addDays(start, 6);
   const days = listDays(start, end);
@@ -1136,7 +1211,7 @@ function renderWeekSchedulerView(date, schedule, filter) {
                 <div class="week-weekday">${escapeHtml(weekdayLabel(day))}</div>
                 <div class="week-date">${escapeHtml(shortDayLabel(day))}</div>
               </div>
-              <a class="button button-small button-ghost" href="${buildDayUrl(day, filter)}">Open day</a>
+              <a class="button button-small button-ghost" href="${buildDayUrl(day, filter, lanes)}">Open day</a>
             </div>
             <div class="week-summary-row">
               <span>${daySummary.total} job${daySummary.total === 1 ? '' : 's'}</span>
@@ -1144,7 +1219,7 @@ function renderWeekSchedulerView(date, schedule, filter) {
             </div>
             <div class="week-body">
               ${dayJobs.length ? dayJobs.slice(0, 4).map((job) => schedulerCard(job, { compact: true, view: 'week', filter })).join('') : `<div class="empty-lane">No jobs on this day</div>`}
-              ${dayJobs.length > 4 ? `<a class="more-link" href="${buildDayUrl(day, filter)}">Open day to view ${dayJobs.length - 4} more</a>` : ''}
+              ${dayJobs.length > 4 ? `<a class="more-link" href="${buildDayUrl(day, filter, lanes)}">Open day to view ${dayJobs.length - 4} more</a>` : ''}
             </div>
           </section>
         `;
@@ -1153,7 +1228,7 @@ function renderWeekSchedulerView(date, schedule, filter) {
   `;
 }
 
-function renderMonthSchedulerView(date, schedule, filter) {
+function renderMonthSchedulerView(date, schedule, filter, lanes = []) {
   const start = monthGridStart(date);
   const end = monthGridEnd(date);
   const days = listDays(start, end);
@@ -1171,7 +1246,7 @@ function renderMonthSchedulerView(date, schedule, filter) {
         return `
           <section class="month-cell ${day.startsWith(activeMonth) ? '' : 'is-muted-month'} ${day === localToday() ? 'is-today' : ''} ${day === date ? 'is-focused-day' : ''}">
             <div class="month-day-top">
-              <a class="month-day-link" href="${buildDayUrl(day, filter)}"><strong>${parseDayKey(day).getDate()}</strong></a>
+              <a class="month-day-link" href="${buildDayUrl(day, filter, lanes)}"><strong>${parseDayKey(day).getDate()}</strong></a>
               <span>${daySummary.total ? `${daySummary.total} job${daySummary.total === 1 ? '' : 's'}` : 'Open day'}</span>
             </div>
             <div class="month-day-summary ${daySummary.unassigned ? 'has-unassigned' : ''}">
@@ -1179,7 +1254,7 @@ function renderMonthSchedulerView(date, schedule, filter) {
             </div>
             <div class="month-day-body">
               ${dayJobs.length ? dayJobs.slice(0, 2).map((job) => schedulerCard(job, { compact: true, month: true, filter })).join('') : '<div class="empty-lane">No jobs</div>'}
-              ${dayJobs.length > 2 ? `<a class="more-link" href="${buildDayUrl(day, filter)}">Open day to view ${dayJobs.length - 2} more</a>` : ''}
+              ${dayJobs.length > 2 ? `<a class="more-link" href="${buildDayUrl(day, filter, lanes)}">Open day to view ${dayJobs.length - 2} more</a>` : ''}
             </div>
           </section>
         `;
@@ -1188,7 +1263,7 @@ function renderMonthSchedulerView(date, schedule, filter) {
   `;
 }
 
-function renderRangeGuide(view, date, schedule, filter = '') {
+function renderRangeGuide(view, date, schedule, filter = '', lanes = []) {
   const range = viewRange(view, date);
   const days = listDays(range.startDate, range.endDate);
   const jobsByDay = groupJobsByDay(schedule.jobs, range.startDate, range.endDate);
@@ -1197,7 +1272,7 @@ function renderRangeGuide(view, date, schedule, filter = '') {
       ${days.slice(0, view === 'month' ? 14 : days.length).map((day) => {
         const dayJobs = jobsByDay.get(day) || [];
         return `
-          <a class="range-guide-row ${day === date ? 'is-active' : ''}" href="${buildDayUrl(day, filter)}">
+          <a class="range-guide-row ${day === date ? 'is-active' : ''}" href="${buildDayUrl(day, filter, lanes)}">
             <span>${escapeHtml(shortDayLabel(day))}</span>
             <strong>${dayJobs.length}</strong>
           </a>
@@ -1213,6 +1288,64 @@ function filterSchedule(schedule, rawFilter) {
   if (!filter) return schedule;
   const jobs = filterJobs(schedule.jobs, filter);
   return { ...schedule, jobs };
+}
+
+function normalizeSelectedLaneIds(selectedLaneIds, lanes = []) {
+  const allowed = new Set(lanes.map((lane) => lane.id));
+  return selectedLaneIds.filter((laneId) => allowed.has(laneId));
+}
+
+function filterScheduleByLaneSelection(schedule, selectedLaneIds) {
+  if (!selectedLaneIds.length) return schedule;
+  const visible = new Set(selectedLaneIds);
+  return {
+    ...schedule,
+    lanes: schedule.lanes.filter((lane) => visible.has(lane.id)),
+    jobs: schedule.jobs.filter((job) => visible.has(job.assigneeTeamMemberId || 'unassigned')),
+  };
+}
+
+function renderMiniMonthRail({ view, date, filter = '', selectedLaneIds = [] }) {
+  const monthStart = startOfMonth(date);
+  const gridStart = monthGridStart(date);
+  const gridEnd = monthGridEnd(date);
+  const activeMonth = monthStart.slice(0, 7);
+  return `
+    <div class="mini-month-card stack-gap">
+      <div class="mini-month-header">
+        <a class="button button-small button-ghost" href="${buildSchedulerUrl({ view, date: stepAnchorDay('month', date, -1), filter, lanes: selectedLaneIds })}">Previous</a>
+        <strong>${escapeHtml(formatRangeLabel('month', date))}</strong>
+        <a class="button button-small button-ghost" href="${buildSchedulerUrl({ view, date: stepAnchorDay('month', date, 1), filter, lanes: selectedLaneIds })}">Next</a>
+      </div>
+      <div class="mini-month-weekdays">
+        ${['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((label) => `<span>${label}</span>`).join('')}
+      </div>
+      <div class="mini-month-grid">
+        ${listDays(gridStart, gridEnd).map((day) => `
+          <a class="mini-month-day ${day === date ? 'is-active' : ''} ${day === localToday() ? 'is-today' : ''} ${day.startsWith(activeMonth) ? '' : 'is-muted-month'}" href="${buildSchedulerUrl({ view, date: day, filter, lanes: selectedLaneIds })}">${parseDayKey(day).getDate()}</a>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderLaneFilterOptions(schedule, selectedLaneIds = []) {
+  const counts = new Map(schedule.lanes.map((lane) => [lane.id, 0]));
+  for (const job of schedule.jobs) {
+    const laneId = job.assigneeTeamMemberId || 'unassigned';
+    counts.set(laneId, (counts.get(laneId) || 0) + 1);
+  }
+  const active = selectedLaneIds.length ? new Set(selectedLaneIds) : new Set(schedule.lanes.map((lane) => lane.id));
+
+  return schedule.lanes.map((lane) => `
+    <label class="lane-filter-row">
+      <span class="lane-filter-main">
+        <input type="checkbox" name="lane" value="${lane.id}" ${active.has(lane.id) ? 'checked' : ''} />
+        <span>${escapeHtml(lane.label)}</span>
+      </span>
+      <strong>${counts.get(lane.id) || 0}</strong>
+    </label>
+  `).join('');
 }
 
 function renderSchedulerBacklog(jobs, options = {}) {
@@ -1717,8 +1850,8 @@ function splitTags(raw) {
     .filter(Boolean);
 }
 
-function schedulerViewButton(targetView, activeView, date, filter = '') {
-  return `<a class="button ${targetView === activeView ? 'button-primary' : ''}" href="${buildSchedulerUrl({ view: targetView, date, filter })}">${escapeHtml(capitalize(targetView))}</a>`;
+function schedulerViewButton(targetView, activeView, date, filter = '', lanes = []) {
+  return `<a class="button ${targetView === activeView ? 'button-primary' : ''}" href="${buildSchedulerUrl({ view: targetView, date, filter, lanes })}">${escapeHtml(capitalize(targetView))}</a>`;
 }
 
 function compareJobs(left, right) {

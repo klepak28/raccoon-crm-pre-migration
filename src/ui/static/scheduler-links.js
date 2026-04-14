@@ -1,6 +1,9 @@
-export function buildSchedulerUrl({ view, date, filter = '' }) {
+export function buildSchedulerUrl({ view, date, filter = '', lanes = [] }) {
   const params = new URLSearchParams({ view, date });
   if (filter) params.set('filter', filter);
+  for (const laneId of lanes || []) {
+    if (laneId) params.append('lane', laneId);
+  }
   return `/app/calendar_new?${params.toString()}`;
 }
 
@@ -27,8 +30,8 @@ export function buildJobScheduleUrl(jobId, pathname = '', search = '', date = ''
   return `/app/jobs/${jobId}/schedule${query ? `?${query}` : ''}`;
 }
 
-export function buildDayUrl(day, filter = '') {
-  return buildSchedulerUrl({ view: 'day', date: day, filter });
+export function buildDayUrl(day, filter = '', lanes = []) {
+  return buildSchedulerUrl({ view: 'day', date: day, filter, lanes });
 }
 
 export function getSchedulerContext(search = '') {
