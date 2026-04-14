@@ -50,6 +50,7 @@ export function createCustomerServices({ customerRepository, jobRepository, team
         throw httpError(404, 'CUSTOMER_NOT_FOUND', 'Customer not found');
       }
       const merged = applyCustomerInvariants({ ...existing, ...patch });
+      merged.displayName = deriveDisplayName(merged);
       if (!merged.displayName && !merged.firstName) {
         throw httpError(400, 'CUSTOMER_IDENTITY_REQUIRED', 'Customer requires either displayName or firstName');
       }
@@ -60,10 +61,16 @@ export function createCustomerServices({ customerRepository, jobRepository, team
 }
 
 function applyCustomerInvariants(customer) {
+  customer.displayName = customer.displayName || deriveDisplayName(customer);
   if (customer.doNotService) {
     customer.sendNotifications = false;
   }
   return customer;
+}
+
+function deriveDisplayName(customer) {
+  const person = [customer.firstName, customer.lastName].filter(Boolean).join(' ').trim();
+  return person || customer.companyName || customer.displayName || '';
 }
 
 function formatAddressSummary(address) {

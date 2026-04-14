@@ -2,6 +2,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 :root {
   color-scheme: light;
   --bg: #f3f5fb;
@@ -256,6 +260,45 @@ button {
   background: white;
   box-shadow: var(--shadow);
   z-index: 5;
+}
+
+.settings-tabs {
+  display: flex;
+  gap: 10px;
+}
+
+.settings-tab {
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: white;
+}
+
+.settings-tab.is-active {
+  background: #eef4ff;
+  color: var(--primary);
+}
+
+.team-name-cell,
+.color-input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.color-input-row input[type='color'] {
+  width: 64px;
+  min-width: 64px;
+  padding: 4px;
+}
+
+.team-color-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  display: inline-flex;
+  flex: 0 0 12px;
+  box-shadow: 0 0 0 2px rgba(19, 34, 56, 0.08);
 }
 
 .new-menu-item {
@@ -760,6 +803,7 @@ button {
   justify-content: space-between;
   gap: 10px;
   background: #f8fbff;
+  box-shadow: inset 0 4px 0 var(--team-color, #5b7cff);
 }
 
 .calendar-lane-header.is-unassigned {
@@ -793,9 +837,18 @@ button {
 
 .calendar-slot-empty {
   flex: 1;
+  width: 100%;
   border-radius: 12px;
   border: 1px dashed rgba(194, 208, 226, 0.7);
   background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.calendar-slot-empty:hover,
+.month-empty-action:hover {
+  background: #f4f8ff;
+  text-decoration: none;
 }
 
 .calendar-event {
@@ -804,8 +857,8 @@ button {
   gap: 4px;
   padding: 10px 11px;
   border-radius: 14px;
-  border: 1px solid #b9cdfd;
-  background: #edf3ff;
+  border: 1px solid color-mix(in srgb, var(--team-color, #5b7cff) 40%, white);
+  background: color-mix(in srgb, var(--team-color, #5b7cff) 16%, white);
   color: var(--text);
   box-shadow: 0 4px 12px rgba(34, 81, 204, 0.08);
 }
@@ -859,7 +912,8 @@ button {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: #e7eefc;
+  background: var(--team-color, #5b7cff);
+  color: white;
   font-weight: 700;
 }
 
@@ -946,7 +1000,8 @@ button {
   gap: 8px;
   padding: 6px 8px;
   border-radius: 10px;
-  background: #e8efff;
+  background: color-mix(in srgb, var(--team-color, #5b7cff) 16%, white);
+  border-left: 4px solid var(--team-color, #5b7cff);
   color: var(--text);
   font-size: 12px;
 }
@@ -965,6 +1020,11 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.month-empty-action {
+  width: 100%;
+  text-align: center;
 }
 
 .scheduler-card {

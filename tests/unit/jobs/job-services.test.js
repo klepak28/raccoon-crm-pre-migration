@@ -16,6 +16,14 @@ function createCustomer(context, overrides = {}) {
   }));
 }
 
+function createTeamMember(context, overrides = {}) {
+  return context.services.teamMembers.createTeamMember({
+    displayName: 'Team Blue',
+    color: '#5b7cff',
+    ...overrides,
+  });
+}
+
 test('new one-time job starts unscheduled and unassigned', () => {
   const context = createContext();
   const customer = createCustomer(context);
@@ -32,12 +40,13 @@ test('new one-time job starts unscheduled and unassigned', () => {
 test('unschedule clears schedule fields and preserves assignee', () => {
   const context = createContext();
   const customer = createCustomer(context);
+  const teamMember = createTeamMember(context);
   const job = context.services.jobs.createOneTimeJob(customer.id, validateJobInput({
     titleOrServiceSummary: 'Install outlet',
     customerAddressId: customer.addresses[0].id,
   }));
 
-  context.services.jobs.assignJob(job.id, 'tm_0001');
+  context.services.jobs.assignJob(job.id, teamMember.id);
   context.services.jobs.scheduleJob(job.id, {
     scheduledStartAt: '2026-04-13T14:00:00.000Z',
     scheduledEndAt: '2026-04-13T15:00:00.000Z',
@@ -47,11 +56,12 @@ test('unschedule clears schedule fields and preserves assignee', () => {
   assert.equal(updated.scheduleState, 'unscheduled');
   assert.equal(updated.scheduledStartAt, null);
   assert.equal(updated.scheduledEndAt, null);
-  assert.equal(updated.assigneeTeamMemberId, 'tm_0001');
+  assert.equal(updated.assigneeTeamMemberId, teamMember.id);
 });
 
 test('lists operational job summaries for unscheduled queue', () => {
   const context = createContext();
+  const teamMember = createTeamMember(context, { displayName: 'Team Green', color: '#16a34a' });
   const customer = createCustomer(context, {
     displayName: 'Queue Customer',
     mobilePhone: '555-111-2222',
@@ -63,7 +73,7 @@ test('lists operational job summaries for unscheduled queue', () => {
     tags: ['electrical'],
   }));
 
-  context.services.jobs.assignJob(job.id, 'tm_0002');
+  context.services.jobs.assignJob(job.id, teamMember.id);
 
   const items = context.services.jobs.listJobs({ scheduleState: 'unscheduled' });
   const queuedJob = items.find((item) => item.id === job.id);
@@ -72,7 +82,7 @@ test('lists operational job summaries for unscheduled queue', () => {
   assert.equal(queuedJob.customer.primaryPhone, '555-111-2222');
   assert.deepEqual(queuedJob.customer.tags, ['vip']);
   assert.deepEqual(queuedJob.tags, ['electrical']);
-  assert.equal(queuedJob.assignee.displayName, 'Team 2');
+  assert.equal(queuedJob.assignee.displayName, 'Team Green');
 });
 
 test('rejects inactive assignee', () => {
@@ -83,5 +93,11 @@ test('rejects inactive assignee', () => {
     customerAddressId: customer.addresses[0].id,
   }));
 
-  assert.throws(() => context.services.jobs.assignJob(job.id, 'tm_0004'), /active assignable team member/);
+  const inactiveTeam = context.services.teamMembers.createTeamMember({
+    displayName: 'Inactive Team',
+    color: '#888888',
+    activeOnSchedule: false,
+  });
+
+  assert.throws(() => context.services.jobs.assignJob(job.id, inactiveTeam.id), /active assignable team member/);
 });

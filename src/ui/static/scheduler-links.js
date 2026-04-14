@@ -7,10 +7,12 @@ export function buildSchedulerUrl({ view, date, filter = '', lanes = [] }) {
   return `/app/calendar_new?${params.toString()}`;
 }
 
-export function buildNewJobUrl({ customerId, pathname = '', search = '', date = '' }) {
+export function buildNewJobUrl({ customerId, pathname = '', search = '', date = '', start = '', end = '' }) {
   const params = new URLSearchParams();
   if (customerId) params.set('customerId', customerId);
   if (date) params.set('date', date);
+  if (start) params.set('start', start);
+  if (end) params.set('end', end);
 
   const schedulerQuery = getActiveSchedulerReturnTo(pathname, search) || getSchedulerContext(search);
   if (schedulerQuery) params.set('returnTo', schedulerQuery);

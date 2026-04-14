@@ -17,8 +17,8 @@ export function validateCustomerInput(input, { partial = false } = {}) {
     assertEnum(customerType, ['Homeowner', 'Business'], 'customerType');
   }
 
-  if (!partial || 'displayName' in input || 'firstName' in input) {
-    assertRequired(Boolean(displayName || firstName), 'CUSTOMER_IDENTITY_REQUIRED', 'Customer requires either displayName or firstName');
+  if (!partial || 'displayName' in input || 'firstName' in input || 'companyName' in input || 'company' in input) {
+    assertRequired(Boolean(displayName || firstName || companyName), 'CUSTOMER_IDENTITY_REQUIRED', 'Customer requires a first name, company, or derived display name');
   }
 
   const emails = normalizeEmails(input);
@@ -81,7 +81,7 @@ export function validateCustomerInput(input, { partial = false } = {}) {
     addresses,
   });
 
-  assertRequired(Boolean(normalized.displayName || normalized.firstName), 'CUSTOMER_IDENTITY_REQUIRED', 'Customer requires either displayName or firstName');
+  assertRequired(Boolean(normalized.displayName || normalized.firstName || normalized.companyName), 'CUSTOMER_IDENTITY_REQUIRED', 'Customer requires a first name, company, or derived display name');
 
   return normalized;
 }

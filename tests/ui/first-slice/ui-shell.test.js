@@ -31,6 +31,16 @@ test('scheduler shell is served on the expected route', async () => {
   });
 });
 
+test('settings shell is served on the expected route', async () => {
+  const app = createApp({ staticRoot, context: createContext() });
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/app/settings`);
+    const html = await response.text();
+    assert.equal(response.status, 200);
+    assert.match(html, /CRM V1/);
+  });
+});
+
 test('dedicated customer detail shell is served on the expected route', async () => {
   const app = createApp({ staticRoot, context: createContext() });
   await withServer(app, async (baseUrl) => {

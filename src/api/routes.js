@@ -4,6 +4,7 @@ import { validateAssignJobInput } from '../validation/jobs/assign-job.validator.
 import { validateJobInput } from '../validation/jobs/job-input.validator.js';
 import { validateJobListFilters } from '../validation/jobs/job-list-filters.validator.js';
 import { validateScheduleJobInput } from '../validation/jobs/schedule-job.validator.js';
+import { validateTeamMemberInput } from '../validation/team-members/team-member-input.validator.js';
 import { assertNoMultiAssigneeFields, assertNoUnsupportedV1Fields } from '../lib/validation.js';
 
 function renderAppShell(title) {
@@ -33,6 +34,7 @@ export async function handleRoute({ req, res, url, context }) {
   if (req.method === 'GET' && (
     url.pathname === '/app/customers/list' ||
     url.pathname === '/app/calendar_new' ||
+    url.pathname === '/app/settings' ||
     url.pathname === '/app/jobs/new' ||
     matchRoute(req.method, url.pathname, '/app/jobs/:jobId') ||
     matchRoute(req.method, url.pathname, '/app/jobs/:jobId/schedule') ||
@@ -43,7 +45,22 @@ export async function handleRoute({ req, res, url, context }) {
   }
 
   if (req.method === 'GET' && url.pathname === '/api/team-members') {
-    sendJson(res, 200, { items: services.teamMembers.listActiveTeamMembers() });
+    sendJson(res, 200, { items: services.teamMembers.listTeamMembers() });
+    return true;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/team-members') {
+    const body = await readJsonBody(req);
+    const input = validateTeamMemberInput(body);
+    sendJson(res, 201, { item: services.teamMembers.createTeamMember(input) });
+    return true;
+  }
+
+  const teamMemberParams = matchRoute(req.method, url.pathname, '/api/team-members/:teamMemberId');
+  if (teamMemberParams && req.method === 'PATCH') {
+    const body = await readJsonBody(req);
+    const input = validateTeamMemberInput(body, { partial: true });
+    sendJson(res, 200, { item: services.teamMembers.updateTeamMember(teamMemberParams.teamMemberId, input) });
     return true;
   }
 

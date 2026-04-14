@@ -165,5 +165,6 @@ function toJobSummary(job, customerRepository, teamMemberRepository) {
     address,
     createdAt: job.createdAt,
     updatedAt: job.updatedAt,
+    assignmentColor: assignee?.color || '#d6a54c',
   };
 }

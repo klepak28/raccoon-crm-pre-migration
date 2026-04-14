@@ -36,6 +36,7 @@ const app = document.getElementById('app');
 const state = {
   teamMembers: [],
   flash: consumeFlash(),
+  globalNewMenuCleanup: null,
 };
 
 boot().catch(renderFatal);
@@ -49,6 +50,11 @@ async function renderRoute() {
   const pathname = location.pathname;
   if (pathname === '/' || pathname === '/app/customers/list') {
     await renderCustomersListPage();
+    return;
+  }
+
+  if (pathname === '/app/settings') {
+    await renderSettingsPage();
     return;
   }
 
@@ -131,7 +137,7 @@ function renderShell({ title, subtitle = '', nav = 'customers', breadcrumbs = []
             </div>
           </div>
           <button class="icon-button" type="button" data-shell-action="notifications" aria-label="Notifications">🔔</button>
-          <button class="icon-button" type="button" data-shell-action="settings" aria-label="Settings">⚙</button>
+          <a class="icon-button" href="/app/settings" aria-label="Settings">⚙</a>
           <div class="avatar-pill">AI</div>
         </div>
       </header>
@@ -167,6 +173,10 @@ function bindShellChrome() {
   }
 }
 
+function getActiveTeamMembers() {
+  return state.teamMembers.filter((member) => member.activeOnSchedule !== false);
+}
+
 function buildGlobalNewJobHref() {
   const params = new URLSearchParams(location.search);
   const date = location.pathname === '/app/calendar_new' ? params.get('date') || localToday() : '';
@@ -178,23 +188,49 @@ function bindGlobalNewMenu() {
   const panel = document.getElementById('global-new-menu');
   if (!toggle || !panel) return;
 
-  toggle.addEventListener('click', () => {
+  state.globalNewMenuCleanup?.();
+
+  panel.hidden = true;
+
+  const hidePanel = () => {
+    panel.hidden = true;
+  };
+
+  toggle.addEventListener('click', (event) => {
+    event.stopPropagation();
     panel.hidden = !panel.hidden;
   });
+
+  panel.addEventListener('click', (event) => {
+    event.stopPropagation();
+  });
+
+  const handleDocumentClick = () => hidePanel();
+  const handleDocumentKeydown = (event) => {
+    if (event.key === 'Escape') hidePanel();
+  };
+
+  document.addEventListener('click', handleDocumentClick);
+  document.addEventListener('keydown', handleDocumentKeydown);
 
   for (const item of panel.querySelectorAll('[data-new-action]')) {
     item.addEventListener('click', (event) => {
       const action = event.currentTarget.dataset.newAction;
       if (action === 'job') {
-        panel.hidden = true;
+        hidePanel();
         return;
       }
 
       event.preventDefault();
-      panel.hidden = true;
+      hidePanel();
       showTransientPageNotice(`${capitalize(action)} is visible from the global New menu, but remains unsupported in V1.`, 'warning');
     });
   }
+
+  state.globalNewMenuCleanup = () => {
+    document.removeEventListener('click', handleDocumentClick);
+    document.removeEventListener('keydown', handleDocumentKeydown);
+  };
 }
 
 async function renderCustomersListPage() {
@@ -300,6 +336,98 @@ async function renderCustomersListPage() {
   searchInput.addEventListener('input', renderTable);
   document.getElementById('open-create-customer').addEventListener('click', openCreateCustomerModal);
   renderTable();
+}
+
+async function renderSettingsPage() {
+  state.teamMembers = await api.listTeamMembers();
+  const teamMembers = state.teamMembers;
+
+  renderShell({
+    title: 'Settings',
+    subtitle: 'Manage scheduler teams and their colors.',
+    nav: 'scheduler',
+    breadcrumbs: ['<a href="/app/calendar_new">Scheduler</a>', 'Settings'],
+    actions: `
+      <button class="button button-primary" id="create-team-button">Add team</button>
+    `,
+    content: `
+      <section class="surface-card stack-gap-lg">
+        <div class="settings-tabs">
+          <button class="settings-tab is-active" type="button">Employees</button>
+        </div>
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Employees</h2>
+            <p class="section-copy">Create the teams that appear in scheduler columns, assignment pickers, and colored calendar events.</p>
+          </div>
+          <div class="chip-row-inline">
+            ${badge(`${teamMembers.filter((member) => member.activeOnSchedule !== false).length} active`, 'success')}
+          </div>
+        </div>
+        <div id="team-members-region"></div>
+      </section>
+    `,
+  });
+
+  const renderTeamMembers = () => {
+    const region = document.getElementById('team-members-region');
+    if (!teamMembers.length) {
+      region.innerHTML = emptyState(
+        'No teams yet',
+        'Create the first scheduler team, assign it a color, and it will appear in the calendar immediately.',
+        '<button class="button button-primary" id="empty-create-team-button">Add team</button>',
+      );
+      document.getElementById('empty-create-team-button')?.addEventListener('click', () => openTeamMemberModal({ mode: 'create' }));
+      return;
+    }
+
+    region.innerHTML = `
+      <div class="table-shell">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Team</th>
+              <th>Color</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${teamMembers.map((member) => `
+              <tr>
+                <td>
+                  <div class="team-name-cell">
+                    <span class="team-color-dot" style="background:${escapeHtml(member.color || '#5b7cff')}"></span>
+                    <div>
+                      <div class="table-title">${escapeHtml(member.displayName)}</div>
+                      <div class="table-meta">${escapeHtml(member.initials || 'TM')}</div>
+                    </div>
+                  </div>
+                </td>
+                <td><code>${escapeHtml(member.color || '#5b7cff')}</code></td>
+                <td>${member.activeOnSchedule !== false ? badge('Active', 'success') : badge('Inactive', 'warning')}</td>
+                <td>
+                  <div class="inline-actions">
+                    <button class="button button-small" type="button" data-edit-team-id="${member.id}">Edit</button>
+                  </div>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    for (const button of region.querySelectorAll('[data-edit-team-id]')) {
+      button.addEventListener('click', () => {
+        const teamMember = teamMembers.find((member) => member.id === button.dataset.editTeamId);
+        openTeamMemberModal({ mode: 'edit', teamMember });
+      });
+    }
+  };
+
+  document.getElementById('create-team-button').addEventListener('click', () => openTeamMemberModal({ mode: 'create' }));
+  renderTeamMembers();
 }
 
 async function renderCustomerDetailPage(customerId) {
@@ -416,6 +544,7 @@ function renderCustomerJobs(customer, jobs) {
             <th>Address</th>
             <th>Schedule</th>
             <th>Assignee</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
@@ -432,6 +561,11 @@ function renderCustomerJobs(customer, jobs) {
               <td>${escapeHtml(formatAddress(job.address) || formatAddress(customer.addresses[0]) || 'No address')}</td>
               <td>${job.scheduleState === 'scheduled' ? escapeHtml(formatDateRange(job.scheduledStartAt, job.scheduledEndAt)) : badge('Unscheduled', 'warning')}</td>
               <td>${job.assigneeDisplayName ? escapeHtml(job.assigneeDisplayName) : badge('Unassigned', 'warning')}</td>
+              <td>
+                <div class="inline-actions">
+                  <button class="button button-small" type="button" data-edit-job-id="${job.id}">Edit</button>
+                </div>
+              </td>
             </tr>
           `).join('')}
         </tbody>
@@ -444,12 +578,22 @@ function renderCustomerJobs(customer, jobs) {
       location.href = row.dataset.href;
     });
   }
+
+  for (const button of region.querySelectorAll('[data-edit-job-id]')) {
+    button.addEventListener('click', async (event) => {
+      event.stopPropagation();
+      const job = await api.getJob(button.dataset.editJobId);
+      openEditJobModal(job, customer);
+    });
+  }
 }
 
 async function renderNewJobPage() {
   const params = new URLSearchParams(location.search);
   const customerId = params.get('customerId');
   const seededDate = params.get('date') || localToday();
+  const seededStart = params.get('start') || `${seededDate}T09:00`;
+  const seededEnd = params.get('end') || `${seededDate}T10:00`;
   const returnTo = getSchedulerContext(location.search);
 
   if (!customerId) {
@@ -478,7 +622,7 @@ async function renderNewJobPage() {
               ${customers.map((candidate) => `
                 <a
                   class="customer-picker-row"
-                  href="${buildNewJobUrl({ customerId: candidate.id, pathname: location.pathname, search: location.search, date: seededDate })}"
+                  href="${buildNewJobUrl({ customerId: candidate.id, pathname: location.pathname, search: location.search, date: seededDate, start: seededStart, end: seededEnd })}"
                   data-customer-search="${escapeHtml([
                     candidate.displayName,
                     candidate.companyName,
@@ -534,6 +678,8 @@ async function renderNewJobPage() {
             pathname: location.pathname,
             search: location.search,
             date: seededDate,
+            start: seededStart,
+            end: seededEnd,
           });
         },
       });
@@ -556,8 +702,6 @@ async function renderNewJobPage() {
   }
 
   const customer = await api.getCustomer(customerId);
-  const defaultStart = `${seededDate}T09:00`;
-  const defaultEnd = `${seededDate}T10:00`;
   const hasAddresses = Boolean(customer.addresses?.length);
 
   renderShell({
@@ -613,11 +757,11 @@ async function renderNewJobPage() {
             <div class="form-grid two-columns">
               <label>
                 <span>From</span>
-                <input name="scheduledStartAt" type="datetime-local" value="${escapeHtml(defaultStart)}" />
+                <input name="scheduledStartAt" type="datetime-local" value="${escapeHtml(seededStart)}" />
               </label>
               <label>
                 <span>To</span>
-                <input name="scheduledEndAt" type="datetime-local" value="${escapeHtml(defaultEnd)}" />
+                <input name="scheduledEndAt" type="datetime-local" value="${escapeHtml(seededEnd)}" />
               </label>
             </div>
             <div class="inline-actions check-row">
@@ -628,7 +772,7 @@ async function renderNewJobPage() {
               <span>Edit team</span>
               <select name="teamMemberId">
                 <option value="">Unassigned</option>
-                ${state.teamMembers.map((member) => `<option value="${member.id}">${escapeHtml(member.displayName)}</option>`).join('')}
+                ${getActiveTeamMembers().map((member) => `<option value="${member.id}">${escapeHtml(member.displayName)}</option>`).join('')}
               </select>
             </label>
             ${customer.doNotService ? statusMessage('This customer is marked do not service. You can create the job, but the schedule save step will be skipped.', 'warning') : '<div class="table-meta">Leave the team blank to keep the job in the Unassigned lane after scheduling.</div>'}
@@ -761,6 +905,8 @@ async function renderNewJobPage() {
           pathname: location.pathname,
           search: location.search,
           date: seededDate,
+          start: seededStart,
+          end: seededEnd,
         });
       },
       });
@@ -855,7 +1001,7 @@ async function renderJobSchedulePage(jobId) {
             <span>Edit team</span>
             <select name="teamMemberId">
               <option value="">Unassigned</option>
-              ${state.teamMembers.map((member) => `<option value="${member.id}" ${job.assigneeTeamMemberId === member.id ? 'selected' : ''}>${escapeHtml(member.displayName)}</option>`).join('')}
+              ${getActiveTeamMembers().map((member) => `<option value="${member.id}" ${job.assigneeTeamMemberId === member.id ? 'selected' : ''}>${escapeHtml(member.displayName)}</option>`).join('')}
             </select>
           </label>
           <label>
@@ -914,6 +1060,7 @@ async function renderJobSchedulePage(jobId) {
   });
 
   bindSchedulerQuickActions();
+  bindCalendarCreateActions();
 
   document.getElementById('schedule-route-unschedule')?.addEventListener('click', async () => {
     if (!confirm('Undo the current schedule for this job?')) return;
@@ -1187,6 +1334,7 @@ async function renderSchedulerPage() {
             </div>
             <div class="rail-card stack-gap">
               <h2 class="section-title">Employees</h2>
+              <a class="button button-small button-ghost" href="/app/settings">Manage teams</a>
               <form id="scheduler-lane-filter-form" class="stack-gap compact-form">
                 ${renderLaneFilterOptions(schedule, selectedLaneIds)}
               </form>
@@ -1244,6 +1392,7 @@ async function renderSchedulerPage() {
   });
 
   bindSchedulerQuickActions();
+  bindCalendarCreateActions();
 }
 
 function renderSchedulerView({ view, date, schedule, filter, lanes = [] }) {
@@ -1283,12 +1432,12 @@ function renderDaySchedulerView(date, schedule, filter, lanes = []) {
         ${schedule.lanes.map((lane) => {
           const laneJobs = (jobsByLane.get(lane.id) || []).sort(compareJobs);
           return `
-            <div class="calendar-lane-header ${lane.id === 'unassigned' ? 'is-unassigned' : ''}">
+            <div class="calendar-lane-header ${lane.id === 'unassigned' ? 'is-unassigned' : ''}" ${colorStyleAttr(lane.color, '--team-color')}>
               <div>
                 <strong>${escapeHtml(lane.label)}</strong>
                 <div class="table-meta">${laneJobs.length} job${laneJobs.length === 1 ? '' : 's'}</div>
               </div>
-              ${lane.initials ? `<span class="lane-avatar">${escapeHtml(lane.initials)}</span>` : badge('Unassigned', 'warning')}
+              ${lane.initials ? `<span class="lane-avatar" ${colorStyleAttr(lane.color, '--team-color')}>${escapeHtml(lane.initials)}</span>` : badge('Unassigned', 'warning')}
             </div>
           `;
         }).join('')}
@@ -1298,10 +1447,10 @@ function renderDaySchedulerView(date, schedule, filter, lanes = []) {
           for (const lane of schedule.lanes) {
             const laneJobs = (jobsByLaneAndHour.get(lane.id)?.get(hour) || []).sort(compareJobs);
             row.push(`
-              <div class="calendar-slot ${lane.id === 'unassigned' ? 'is-unassigned' : ''}">
+              <div class="calendar-slot ${lane.id === 'unassigned' ? 'is-unassigned' : ''}" data-slot-date="${escapeHtml(date)}" data-slot-hour="${hour}">
                 ${laneJobs.length
                   ? laneJobs.map((job) => renderDayEventCard(job)).join('')
-                  : '<div class="calendar-slot-empty"></div>'}
+                  : `<button class="calendar-slot-empty" type="button" data-empty-slot data-slot-date="${escapeHtml(date)}" data-slot-hour="${hour}">Create new job</button>`}
               </div>
             `);
           }
@@ -1367,7 +1516,7 @@ function renderMonthSchedulerView(date, schedule, filter, lanes = []) {
         const dayJobs = (jobsByDay.get(day) || []).sort(compareJobs);
         const daySummary = summarizeDayJobs(dayJobs);
         return `
-          <section class="month-cell ${day.startsWith(activeMonth) ? '' : 'is-muted-month'} ${day === localToday() ? 'is-today' : ''} ${day === date ? 'is-focused-day' : ''}">
+          <section class="month-cell ${day.startsWith(activeMonth) ? '' : 'is-muted-month'} ${day === localToday() ? 'is-today' : ''} ${day === date ? 'is-focused-day' : ''}" data-empty-day="${escapeHtml(day)}">
             <div class="month-day-top">
               <a class="month-day-link" href="${buildDayUrl(day, filter, lanes)}"><strong>${parseDayKey(day).getDate()}</strong></a>
               <span>${daySummary.total ? `${daySummary.total} job${daySummary.total === 1 ? '' : 's'}` : 'Open day'}</span>
@@ -1376,7 +1525,7 @@ function renderMonthSchedulerView(date, schedule, filter, lanes = []) {
               <span>${daySummary.unassigned ? `${daySummary.unassigned} unassigned` : 'All assigned or empty'}</span>
             </div>
             <div class="month-day-body">
-              ${dayJobs.length ? dayJobs.slice(0, 4).map((job) => renderMonthEventBar(job)).join('') : '<div class="empty-lane">No jobs</div>'}
+              ${dayJobs.length ? dayJobs.slice(0, 4).map((job) => renderMonthEventBar(job)).join('') : `<button class="empty-lane month-empty-action" type="button" data-empty-day-action="${escapeHtml(day)}">Create new job</button>`}
               ${dayJobs.length > 4 ? `<a class="more-link" href="${buildDayUrl(day, filter, lanes)}">Open day to view ${dayJobs.length - 4} more</a>` : ''}
             </div>
           </section>
@@ -1464,6 +1613,7 @@ function renderLaneFilterOptions(schedule, selectedLaneIds = []) {
     <label class="lane-filter-row">
       <span class="lane-filter-main">
         <input type="checkbox" name="lane" value="${lane.id}" ${active.has(lane.id) ? 'checked' : ''} />
+        <span class="team-color-dot" style="background:${escapeHtml(lane.color || '#5b7cff')}"></span>
         <span>${escapeHtml(lane.label)}</span>
       </span>
       <strong>${counts.get(lane.id) || 0}</strong>
@@ -1629,8 +1779,120 @@ function bindSchedulerQuickActions() {
   }
 }
 
+function bindCalendarCreateActions() {
+  for (const button of document.querySelectorAll('[data-empty-slot]')) {
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      const { slotDate, slotHour } = event.currentTarget.dataset;
+      openCalendarCreateMenu({ date: slotDate, hour: Number(slotHour) });
+    });
+  }
+
+  for (const button of document.querySelectorAll('[data-empty-day-action]')) {
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      openCalendarCreateMenu({ date: event.currentTarget.dataset.emptyDayAction });
+    });
+  }
+}
+
+function openCalendarCreateMenu({ date, hour = 9 }) {
+  const start = `${date}T${String(hour).padStart(2, '0')}:00`;
+  const endHour = Math.min(hour + 1, 23);
+  const end = `${date}T${String(endHour).padStart(2, '0')}:00`;
+  const createHref = buildNewJobUrl({ pathname: location.pathname, search: location.search, date, start, end });
+
+  openModal({
+    title: `Create on ${shortDayLabel(date)}`,
+    body: `
+      <div class="stack-gap modal-form">
+        <div class="table-meta">Choose the next action for this empty calendar slot.</div>
+        <div class="modal-actions split-actions">
+          <div class="inline-actions">
+            <button type="button" class="button button-ghost" id="close-modal-button">Cancel</button>
+          </div>
+          <div class="inline-actions">
+            <a class="button button-primary" href="${escapeHtml(createHref)}">Create new job</a>
+          </div>
+        </div>
+      </div>
+    `,
+  });
+
+  document.getElementById('close-modal-button').addEventListener('click', closeModal);
+}
+
 function openCreateCustomerModal(options = {}) {
   openCustomerFormModal({ mode: 'create', ...options });
+}
+
+function openTeamMemberModal({ mode, teamMember = null }) {
+  openModal({
+    title: mode === 'create' ? 'Add team' : `Edit ${teamMember.displayName}`,
+    body: `
+      <form id="team-member-form" class="stack-gap modal-form">
+        <label>
+          <span>Team name</span>
+          <input name="displayName" value="${escapeHtml(teamMember?.displayName || '')}" required />
+        </label>
+        <label>
+          <span>Color</span>
+          <div class="color-input-row">
+            <input name="color" type="color" value="${escapeHtml(teamMember?.color || '#5b7cff')}" />
+            <input name="colorText" value="${escapeHtml(teamMember?.color || '#5b7cff')}" />
+          </div>
+        </label>
+        <div id="team-member-status"></div>
+        <div class="modal-actions split-actions">
+          <div class="inline-actions">
+            <button type="button" class="button button-ghost" id="close-modal-button">Cancel</button>
+          </div>
+          <div class="inline-actions">
+            <button type="submit" class="button button-primary">${mode === 'create' ? 'Create team' : 'Save team'}</button>
+          </div>
+        </div>
+      </form>
+    `,
+  });
+
+  const form = document.getElementById('team-member-form');
+  const colorPicker = form.querySelector('[name="color"]');
+  const colorText = form.querySelector('[name="colorText"]');
+
+  colorPicker.addEventListener('input', () => {
+    colorText.value = colorPicker.value;
+  });
+  colorText.addEventListener('input', () => {
+    if (/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(colorText.value)) {
+      colorPicker.value = colorText.value;
+    }
+  });
+
+  document.getElementById('close-modal-button').addEventListener('click', closeModal);
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    try {
+      const data = new FormData(form);
+      const payload = {
+        displayName: data.get('displayName'),
+        color: data.get('colorText'),
+      };
+      const saved = mode === 'create'
+        ? await api.createTeamMember(payload)
+        : await api.updateTeamMember(teamMember.id, payload);
+      state.teamMembers = await api.listTeamMembers();
+      setFlash(mode === 'create' ? 'Team created.' : 'Team saved.', 'success');
+      closeModal();
+      if (location.pathname === '/app/settings') {
+        await renderSettingsPage();
+      } else {
+        await renderRoute();
+      }
+      return saved;
+    } catch (error) {
+      document.getElementById('team-member-status').innerHTML = statusMessage(error.message, 'danger');
+    }
+  });
 }
 
 function openCustomerFormModal({ mode, customer = null, onSave = null }) {
@@ -1661,7 +1923,7 @@ function openCustomerFormModal({ mode, customer = null, onSave = null }) {
         return;
       }
       setFlash(mode === 'create' ? 'Customer created.' : 'Customer saved.', 'success');
-      location.href = `/app/customers/${saved.id}`;
+      location.href = buildCustomerUrl(saved.id, location.pathname, location.search);
     } catch (error) {
       document.getElementById('customer-modal-status').innerHTML = statusMessage(error.message, 'danger');
     }
@@ -1808,21 +2070,25 @@ function openScheduleModal(job) {
 }
 
 function openTeamModal(job) {
+  const activeTeamMembers = getActiveTeamMembers();
   openModal({
     title: `${job.assignee?.displayName ? 'Reassign' : 'Assign'} ${job.jobNumber}`,
     body: `
       <form id="team-job-form" class="stack-gap modal-form">
         <label>
           <span>Find team member</span>
-          <input id="team-member-search" placeholder="Search active team members" />
+          <input id="team-member-search" placeholder="Search active team members" ${activeTeamMembers.length ? '' : 'disabled'} />
         </label>
         <label>
           <span>Active team member</span>
-          <select name="teamMemberId" id="team-member-select">
-            ${state.teamMembers.map((member) => `<option value="${member.id}" ${job.assigneeTeamMemberId === member.id ? 'selected' : ''}>${escapeHtml(member.displayName)}</option>`).join('')}
+          <select name="teamMemberId" id="team-member-select" ${activeTeamMembers.length ? '' : 'disabled'}>
+            ${activeTeamMembers.length
+              ? activeTeamMembers.map((member) => `<option value="${member.id}" ${job.assigneeTeamMemberId === member.id ? 'selected' : ''}>${escapeHtml(member.displayName)}</option>`).join('')
+              : '<option value="">Create a team in Settings first</option>'}
           </select>
         </label>
         <div class="table-meta">Only active team members are available in V1. Use Set unassigned to move this job back to the Unassigned lane.</div>
+        ${activeTeamMembers.length ? '' : '<a class="button button-ghost" href="/app/settings">Open settings</a>'}
         <div id="team-job-status"></div>
         <div class="modal-actions split-actions">
           <div class="inline-actions">
@@ -1830,7 +2096,7 @@ function openTeamModal(job) {
           </div>
           <div class="inline-actions">
             <button type="button" class="button button-ghost" id="close-modal-button">Cancel</button>
-            <button type="submit" class="button button-primary">Save team</button>
+            <button type="submit" class="button button-primary" ${activeTeamMembers.length ? '' : 'disabled'}>Save team</button>
           </div>
         </div>
       </form>
@@ -1898,7 +2164,6 @@ function customerFormHtml(customer) {
   const address = customer?.addresses?.[0] || {};
   return `
     <div class="form-grid two-columns">
-      <label><span>Display name</span><input name="displayName" value="${escapeHtml(customer?.displayName || '')}" /></label>
       <label><span>Customer type</span>
         <select name="customerType">
           <option value="Homeowner" ${(customer?.customerType || 'Homeowner') === 'Homeowner' ? 'selected' : ''}>Homeowner</option>
@@ -1932,7 +2197,6 @@ function customerFormHtml(customer) {
 function customerPayloadFromForm(form) {
   const data = new FormData(form);
   return {
-    displayName: data.get('displayName'),
     firstName: data.get('firstName'),
     lastName: data.get('lastName'),
     companyName: data.get('companyName'),
@@ -1983,7 +2247,7 @@ function compareJobs(left, right) {
 
 function renderDayEventCard(job) {
   return `
-    <a class="calendar-event ${!job.assigneeTeamMemberId ? 'is-unassigned' : ''}" href="${buildJobUrl(job.id, location.pathname, location.search)}">
+    <a class="calendar-event ${!job.assigneeTeamMemberId ? 'is-unassigned' : ''}" ${colorStyleAttr(job.assignmentColor, '--team-color')} href="${buildJobUrl(job.id, location.pathname, location.search)}">
       <div class="calendar-event-time">${escapeHtml(formatTime(job.scheduledStartAt))} to ${escapeHtml(formatTime(job.scheduledEndAt))}</div>
       <div class="calendar-event-title">${escapeHtml(job.titleOrServiceSummary)}</div>
       <div class="calendar-event-meta">${escapeHtml(job.customer?.displayName || 'Unknown customer')}</div>
@@ -1993,7 +2257,7 @@ function renderDayEventCard(job) {
 
 function renderMonthEventBar(job) {
   return `
-    <a class="month-event-bar ${!job.assigneeTeamMemberId ? 'is-unassigned' : ''}" href="${buildJobUrl(job.id, location.pathname, location.search)}">
+    <a class="month-event-bar ${!job.assigneeTeamMemberId ? 'is-unassigned' : ''}" ${colorStyleAttr(job.assignmentColor, '--team-color')} href="${buildJobUrl(job.id, location.pathname, location.search)}">
       <span class="month-event-time">${escapeHtml(formatTime(job.scheduledStartAt))}</span>
       <span class="month-event-label">${escapeHtml(job.titleOrServiceSummary)}</span>
     </a>
@@ -2004,6 +2268,11 @@ function formatHourLabel(hour) {
   const suffix = hour >= 12 ? 'pm' : 'am';
   const normalized = hour % 12 || 12;
   return `${normalized}${suffix}`;
+}
+
+function colorStyleAttr(color, variableName = '--team-color') {
+  const safeColor = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(String(color || '')) ? color : '#5b7cff';
+  return `style="${variableName}:${safeColor}"`;
 }
 
 function showTransientPageNotice(message, tone = 'info') {

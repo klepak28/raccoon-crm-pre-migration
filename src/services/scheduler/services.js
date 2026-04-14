@@ -19,11 +19,12 @@ export function createSchedulerServices({ jobRepository, customerRepository, tea
         .sort((left, right) => left.displayName.localeCompare(right.displayName));
 
       const lanes = [
-        { id: 'unassigned', label: 'Unassigned', pseudo: true, jobs: [] },
+        { id: 'unassigned', label: 'Unassigned', color: '#d6a54c', pseudo: true, jobs: [] },
         ...activeTeamMembers.map((member) => ({
           id: member.id,
           label: member.displayName,
           initials: member.initials,
+          color: member.color,
           pseudo: false,
           jobs: [],
         })),
@@ -52,7 +53,7 @@ export function createSchedulerServices({ jobRepository, customerRepository, tea
         .map((job) => toScheduleJob(job, customerRepository, teamMemberRepository));
 
       const lanes = [
-        { id: 'unassigned', label: 'Unassigned', pseudo: true },
+        { id: 'unassigned', label: 'Unassigned', color: '#d6a54c', pseudo: true },
         ...teamMemberRepository
           .listActive()
           .sort((left, right) => left.displayName.localeCompare(right.displayName))
@@ -60,6 +61,7 @@ export function createSchedulerServices({ jobRepository, customerRepository, tea
             id: member.id,
             label: member.displayName,
             initials: member.initials,
+            color: member.color,
             pseudo: false,
           })),
       ];
@@ -94,5 +96,6 @@ function toScheduleJob(job, customerRepository, teamMemberRepository) {
     assigneeTeamMemberId: job.assigneeTeamMemberId,
     assignee,
     assignmentLabel: assignee?.displayName || 'Unassigned',
+    assignmentColor: assignee?.color || '#d6a54c',
   };
 }

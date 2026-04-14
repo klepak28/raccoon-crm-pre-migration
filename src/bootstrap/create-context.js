@@ -5,6 +5,7 @@ import { createStore } from '../data/store.js';
 import { createCustomerServices } from '../services/customers/services.js';
 import { createJobServices } from '../services/jobs/services.js';
 import { createSchedulerServices } from '../services/scheduler/services.js';
+import { createTeamMemberServices } from '../services/team-members/services.js';
 
 export function createContext() {
   const store = createStore();
@@ -22,11 +23,7 @@ export function createContext() {
       customers: createCustomerServices({ customerRepository, jobRepository, teamMemberRepository }),
       jobs: createJobServices({ customerRepository, jobRepository, teamMemberRepository }),
       scheduler: createSchedulerServices({ jobRepository, customerRepository, teamMemberRepository }),
-      teamMembers: {
-        listActiveTeamMembers() {
-          return teamMemberRepository.listActive();
-        },
-      },
+      teamMembers: createTeamMemberServices({ teamMemberRepository, jobRepository }),
     },
   };
 }

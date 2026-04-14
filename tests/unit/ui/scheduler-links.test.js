@@ -67,8 +67,10 @@ test('buildNewJobUrl carries customer, date, and scheduler return context', () =
       pathname: '/app/calendar_new',
       search: '?view=day&date=2026-04-15&filter=vip',
       date: '2026-04-15',
+      start: '2026-04-15T13:00',
+      end: '2026-04-15T14:00',
     }),
-    '/app/jobs/new?customerId=cust_123&date=2026-04-15&returnTo=%2Fapp%2Fcalendar_new%3Fview%3Dday%26date%3D2026-04-15%26filter%3Dvip',
+    '/app/jobs/new?customerId=cust_123&date=2026-04-15&start=2026-04-15T13%3A00&end=2026-04-15T14%3A00&returnTo=%2Fapp%2Fcalendar_new%3Fview%3Dday%26date%3D2026-04-15%26filter%3Dvip',
   );
 });
 

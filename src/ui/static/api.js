@@ -22,6 +22,8 @@ export async function sendJson(url, payload, method = 'POST') {
 
 export const api = {
   listTeamMembers: async () => (await getJson('/api/team-members')).items,
+  createTeamMember: async (payload) => (await sendJson('/api/team-members', payload)).item,
+  updateTeamMember: async (teamMemberId, payload) => (await sendJson(`/api/team-members/${teamMemberId}`, payload, 'PATCH')).item,
   listCustomers: async () => (await getJson('/api/customers')).items,
   listJobs: async (filters = {}) => {
     const params = new URLSearchParams();

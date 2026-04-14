@@ -22,8 +22,17 @@ test('accepts firstName-only customer identity', () => {
   assert.equal(result.displayName, 'Alex');
 });
 
+test('accepts company-only customer identity when display name field is not used', () => {
+  const result = validateCustomerInput({
+    companyName: 'Northwind Services',
+    customerType: 'Business',
+  });
+
+  assert.equal(result.displayName, 'Northwind Services');
+});
+
 test('rejects customer when displayName and firstName are both missing', () => {
-  assert.throws(() => validateCustomerInput({ customerType: 'Homeowner' }), /displayName or firstName/);
+  assert.throws(() => validateCustomerInput({ customerType: 'Homeowner' }), /first name, company, or derived display name/);
 });
 
 test('rejects malformed email', () => {

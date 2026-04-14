@@ -23,6 +23,14 @@ function createCustomer(context) {
   }));
 }
 
+function createTeamMember(context, overrides = {}) {
+  return context.services.teamMembers.createTeamMember({
+    displayName: 'Team Blue',
+    color: '#5b7cff',
+    ...overrides,
+  });
+}
+
 test('returns unassigned lane first and includes intersecting scheduled jobs', () => {
   const context = createContext();
   const customer = createCustomer(context);
@@ -45,6 +53,7 @@ test('returns unassigned lane first and includes intersecting scheduled jobs', (
 test('moves job into assigned lane after assignment', () => {
   const context = createContext();
   const customer = createCustomer(context);
+  const teamMember = createTeamMember(context);
   const job = context.services.jobs.createOneTimeJob(customer.id, validateJobInput({
     titleOrServiceSummary: 'Assigned repair',
     customerAddressId: customer.addresses[0].id,
@@ -54,10 +63,10 @@ test('moves job into assigned lane after assignment', () => {
     scheduledStartAt: '2026-04-13T12:00:00.000Z',
     scheduledEndAt: '2026-04-13T13:00:00.000Z',
   });
-  context.services.jobs.assignJob(job.id, 'tm_0001');
+  context.services.jobs.assignJob(job.id, teamMember.id);
 
   const daySchedule = context.services.scheduler.getDaySchedule('2026-04-13');
-  const lane = daySchedule.lanes.find((item) => item.id === 'tm_0001');
+  const lane = daySchedule.lanes.find((item) => item.id === teamMember.id);
   assert.equal(lane.jobs.length, 1);
   assert.equal(lane.jobs[0].id, job.id);
 });
@@ -132,6 +141,7 @@ test('job starting at local midnight does not appear on the previous day', () =>
 test('range query returns scheduled jobs with lane metadata for calendar views', () => {
   const context = createContext();
   const customer = createCustomer(context);
+  const teamMember = createTeamMember(context, { displayName: 'Team Green', color: '#16a34a' });
   const firstJob = context.services.jobs.createOneTimeJob(customer.id, validateJobInput({
     titleOrServiceSummary: 'Monday visit',
     customerAddressId: customer.addresses[0].id,
@@ -149,7 +159,7 @@ test('range query returns scheduled jobs with lane metadata for calendar views',
     scheduledStartAt: toUiIso('2026-04-15T11:00'),
     scheduledEndAt: toUiIso('2026-04-15T12:00'),
   });
-  context.services.jobs.assignJob(secondJob.id, 'tm_0002');
+  context.services.jobs.assignJob(secondJob.id, teamMember.id);
 
   const range = context.services.scheduler.getScheduleRange('2026-04-13', '2026-04-19');
 
@@ -157,5 +167,5 @@ test('range query returns scheduled jobs with lane metadata for calendar views',
   assert.equal(range.jobs.some((item) => item.id === firstJob.id), true);
   assert.equal(range.jobs.some((item) => item.id === secondJob.id), true);
   assert.equal(range.lanes[0].id, 'unassigned');
-  assert.equal(range.lanes.some((item) => item.id === 'tm_0002'), true);
+  assert.equal(range.lanes.some((item) => item.id === teamMember.id), true);
 });
