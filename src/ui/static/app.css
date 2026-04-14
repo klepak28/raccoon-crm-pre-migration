@@ -859,6 +859,50 @@ button {
   min-width: 0;
 }
 
+.customer-picker-search {
+  min-width: 0;
+}
+
+.customer-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.customer-picker-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: white;
+}
+
+.customer-picker-row:hover {
+  text-decoration: none;
+  border-color: var(--border-strong);
+  background: #f8fbff;
+}
+
+.customer-picker-main,
+.customer-picker-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.customer-picker-main span,
+.customer-picker-meta span {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.customer-picker-meta {
+  align-items: end;
+}
+
 @media (max-width: 1080px) {
   .shell {
     grid-template-columns: 1fr;
@@ -906,7 +950,8 @@ button {
   .scheduler-card-meta-row,
   .lane-summary,
   .week-summary-row,
-  .month-day-summary {
+  .month-day-summary,
+  .customer-picker-row {
     grid-template-columns: 1fr;
     flex-direction: column;
   }
@@ -914,5 +959,9 @@ button {
   .search-field {
     min-width: 0;
     width: 100%;
+  }
+
+  .customer-picker-meta {
+    align-items: start;
   }
 }

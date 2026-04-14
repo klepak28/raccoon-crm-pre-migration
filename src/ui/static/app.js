@@ -378,13 +378,104 @@ async function renderNewJobPage() {
   const returnTo = getSchedulerContext(location.search);
 
   if (!customerId) {
+    const customers = await api.listCustomers();
     renderShell({
       title: 'New job',
-      subtitle: 'Launch this workflow from a customer record so the customer context stays explicit.',
+      subtitle: 'Choose a customer first, then continue in the dedicated one-time job workspace.',
       nav: returnTo ? 'scheduler' : 'customers',
       breadcrumbs: ['<a href="/app/customers/list">Customers</a>', 'New job'],
       actions: returnTo ? `<a class="button button-ghost" href="${escapeHtml(returnTo)}">Back to scheduler</a>` : '',
-      content: `<section class="surface-card">${emptyState('Customer required', 'Open a customer record first, then start a one-time job from there.', `<a class="button button-primary" href="/app/customers/list${returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : ''}">Go to customers</a>`)}</section>`,
+      content: `
+        <div class="job-workspace-grid">
+          <section class="surface-card stack-gap-lg">
+            <div class="section-header">
+              <div>
+                <h2 class="section-title">Customer</h2>
+                <p class="section-copy">Search by name, company, phone, email, or tag. This keeps customer lookup inside the create-job flow.</p>
+              </div>
+              <button type="button" class="button button-small button-ghost" id="new-job-customer-button">+ New customer</button>
+            </div>
+            <label class="search-field customer-picker-search">
+              <span>Find customer</span>
+              <input id="new-job-customer-search" placeholder="Name, phone, email, company, or tag" />
+            </label>
+            <div id="new-job-customer-list" class="customer-picker-list">
+              ${customers.map((candidate) => `
+                <a
+                  class="customer-picker-row"
+                  href="${buildNewJobUrl({ customerId: candidate.id, pathname: location.pathname, search: location.search, date: seededDate })}"
+                  data-customer-search="${escapeHtml([
+                    candidate.displayName,
+                    candidate.companyName,
+                    candidate.phones?.map((phone) => phone.value).join(' '),
+                    candidate.emails?.map((email) => email.value).join(' '),
+                    (candidate.tags || []).join(' '),
+                    formatAddress(candidate.addresses?.[0]),
+                  ].filter(Boolean).join(' ').toLowerCase())}"
+                >
+                  <div class="customer-picker-main">
+                    <strong>${escapeHtml(candidate.displayName)}</strong>
+                    <span>${escapeHtml(candidate.companyName || formatAddress(candidate.addresses?.[0]) || 'No address')}</span>
+                  </div>
+                  <div class="customer-picker-meta">
+                    <span>${escapeHtml(candidate.phones?.[0]?.value || candidate.emails?.[0]?.value || 'No contact')}</span>
+                    ${candidate.doNotService ? badge('Do not service', 'danger') : badge(candidate.customerType || 'Customer', 'neutral')}
+                  </div>
+                </a>
+              `).join('')}
+            </div>
+            <div id="new-job-customer-empty" class="empty-state" hidden>
+              <h3>No matching customers</h3>
+              <p>Try a different search, or create the customer inline and come right back to this job flow.</p>
+            </div>
+          </section>
+
+          <section class="surface-card stack-gap-lg">
+            <div class="section-header">
+              <h2 class="section-title">Next step</h2>
+              <div class="chip-row-inline">
+                ${badge('New job', 'neutral')}
+                ${badge('Customer required', 'warning')}
+              </div>
+            </div>
+            ${statusMessage('Select a customer to unlock schedule, private notes, and line items.', 'warning')}
+            <div class="stat-summary-card">
+              <div class="stat-row"><span>Schedule panel</span><strong>Waiting for customer</strong></div>
+              <div class="stat-row"><span>Private notes</span><strong>Waiting for customer</strong></div>
+              <div class="stat-row"><span>Line items</span><strong>Waiting for customer</strong></div>
+            </div>
+            <div class="table-meta">This route now works from Scheduler too, instead of forcing you back out to a customer record first.</div>
+          </section>
+        </div>
+      `,
+    });
+
+    document.getElementById('new-job-customer-button').addEventListener('click', () => {
+      openCreateCustomerModal({
+        onSave(savedCustomer) {
+          setFlash('Customer created. Continue building the job.', 'success');
+          location.href = buildNewJobUrl({
+            customerId: savedCustomer.id,
+            pathname: location.pathname,
+            search: location.search,
+            date: seededDate,
+          });
+        },
+      });
+    });
+
+    const searchInput = document.getElementById('new-job-customer-search');
+    const rows = Array.from(document.querySelectorAll('.customer-picker-row'));
+    const emptyStateNode = document.getElementById('new-job-customer-empty');
+    searchInput.addEventListener('input', () => {
+      const query = searchInput.value.trim().toLowerCase();
+      let visible = 0;
+      for (const row of rows) {
+        const matches = !query || row.dataset.customerSearch.includes(query);
+        row.hidden = !matches;
+        if (matches) visible += 1;
+      }
+      emptyStateNode.hidden = visible > 0;
     });
     return;
   }
