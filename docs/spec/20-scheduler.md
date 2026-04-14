@@ -26,6 +26,29 @@ The scheduler is a multi-view operational calendar used to place jobs and events
 - View dropdown switches renderer mode while preserving context.
 - `Bulk actions` enters multi-select mode.
 
+### Screenshot-confirmed shell details
+- Scheduler sits inside the broader app shell with visible top navigation including:
+  - `Home`
+  - `Inbox`
+  - `Schedule`
+  - `Customers`
+- Global top bar includes:
+  - search input `Search`
+  - `New` button
+  - notifications/help/settings/avatar controls
+- The scheduler toolbar in observed screenshots also shows compact icon buttons for:
+  - calendar-style view
+  - map/pin-style view
+
+## New menu entry points
+### Hard requirements
+- Global `New` menu from the scheduler shell exposes at least:
+  - `Job`
+  - `Recurring job`
+  - `Estimate`
+  - `Event`
+- `Job` and `Recurring job` are visible as first-class create actions from the scheduler context, not hidden behind secondary flows.
+
 ## View modes
 ### Hard requirements
 - View dropdown values captured from source:
@@ -69,6 +92,12 @@ The scheduler is a multi-view operational calendar used to place jobs and events
 - Standard month grid
 - Weekday headers `Sun` through `Sat`
 - Calendar items can be bulk-selected
+- Sidebar filters remain visible alongside month view.
+- Month header uses the active month label, observed as `April 2026`.
+- Main month grid can show multiple stacked items inside a day cell.
+- Observed month-cell item labels include:
+  - `Demo Research`
+  - `Event - Browser Event Final`
 
 #### Dispatch
 - Time-oriented dispatcher board
@@ -97,6 +126,11 @@ The scheduler is a multi-view operational calendar used to place jobs and events
   - Team 2
   - Artur P.
 - Resource visuals include initials/badges.
+- Observed visible hour labels run from roughly `7am` through `5pm` in the captured viewport.
+- Scheduled cards are rendered directly inside the lane/time grid, not in a separate side list.
+- Observed day-view card examples include:
+  - `Demo Research` in the `Unassigned` lane
+  - `New Job` in an assigned team lane during scheduling flow
 
 ## Resource model
 ### Hard requirements
@@ -122,6 +156,8 @@ The scheduler is a multi-view operational calendar used to place jobs and events
   - Team 1
   - Team 2
   - Artur Pirogov
+- The mini-calendar and employee checklist persist in both observed day and month views.
+- The selected day is highlighted in the mini-calendar and matches the active main view date.
 
 ## Empty and populated states
 ### Hard requirements
@@ -141,6 +177,9 @@ The scheduler is a multi-view operational calendar used to place jobs and events
   - assignment marker
   - status/iconography
   - click-through to job detail
+- Unassigned cards use a muted/gray treatment in the observed screenshots.
+- Assigned cards can use a stronger accent color and include the team badge inline.
+- Card text is compact and truncated when space is limited.
 
 ## Bulk actions
 ### Hard requirements
@@ -188,6 +227,71 @@ The scheduler is a multi-view operational calendar used to place jobs and events
   - Customer tags
   - Job tags
   - Private notes
+
+### Screenshot-confirmed create / schedule details
+- A `New job` flow exists as a dedicated two-column screen with:
+  - left column for customer + schedule controls
+  - right column for private notes + line items
+- New job header includes:
+  - close icon
+  - title `New job`
+  - `Job Template` dropdown
+  - `Save job`
+- New job customer card includes:
+  - customer lookup input
+  - inline action `+ New customer`
+- New job schedule card includes:
+  - `From` date and time
+  - `To` date and time
+  - timezone label, observed as `Timezone: CDT`
+  - `Anytime`
+  - `Edit team`
+  - selected team chip, observed as `Team 1`
+  - `Notify customer`
+- New job flow includes collapsible/additional sections below schedule:
+  - `Checklists`
+  - `Attachments`
+  - `Fields`
+- New job right column includes:
+  - `Private notes`
+  - note scope toggle `This job` / `Customer`
+  - `Line items`
+  - `Services`
+  - `Materials`
+  - money summary rows `Subtotal`, `Tax rate`, `Total`
+- Observed service row includes:
+  - service name `Home Cleaning`
+  - `Total price`
+  - service edit/delete controls
+  - `Add service`
+  - `Service Price Book`
+- Observed materials section includes:
+  - `Add material`
+  - `Material Price Book`
+
+### Screenshot-confirmed schedule-a-time flow
+- A separate scheduling surface titled `Schedule a time for Job` is visible.
+- Its header includes:
+  - close icon
+  - `Notify customer`
+  - `Save`
+- The left scheduling panel visibly includes:
+  - date input, observed as `04/14/26`
+  - time input, observed as `2:00pm`
+  - `Anytime`
+  - `Edit team`
+  - selected team chip
+  - `Arrival window`
+  - `Repeats`
+  - `Repeats every`
+  - `Repeats on`
+  - `Ends`
+- Observed recurrence values in that screen include:
+  - `Custom`
+  - numeric repeat interval `1`
+  - repeat unit `Week`
+  - end options `Never`, `After`, `On`
+- The right side of that scheduling screen embeds the live day scheduler grid, allowing schedule placement against visible employee lanes.
 
 ## Assignment
 ### Hard requirements
@@ -242,6 +346,7 @@ The scheduler is a multi-view operational calendar used to place jobs and events
   - Location
 - Save action may require selecting normalized time options from the dropdown.
 - Event creation is separate from job-rooted recurrence.
+- Event creation is also exposed directly from the scheduler `New` menu.
 
 ## Recurring jobs
 ### Hard requirements
@@ -289,6 +394,12 @@ The scheduler is a multi-view operational calendar used to place jobs and events
   - `This Occurrence`
   - `This and Future Occurrences`
 - Monthly invalid-position behavior skips unsupported months rather than coercing dates.
+- Scheduler `New` menu exposes `Recurring job` directly.
+- Observed recurrence editor controls include visible weekday chips/buttons for `Repeats on`.
+- Observed `Ends` section uses mutually exclusive radio-style choices:
+  - `Never`
+  - `After`
+  - `On`
 
 ## Optional / future-facing items mentioned in source
 - Find-a-time recommendation logic
@@ -300,3 +411,6 @@ The scheduler is a multi-view operational calendar used to place jobs and events
 - Full `Find a time` behavior is not described.
 - It is unclear whether unscheduling also clears assignment.
 - Event recurrence was not confirmed in the observed event composer.
+- The exact meaning of card color differences such as gray vs red/beige in month view is not confirmed by the screenshot alone.
+- The exact behavior of the floating blue action button visible in scheduler screens is not confirmed.
+- In the observed `Schedule a time for Job` screenshot, only one date/time pair is visible in the captured viewport, so the full start/end field arrangement for that specific flow remains partially occluded.

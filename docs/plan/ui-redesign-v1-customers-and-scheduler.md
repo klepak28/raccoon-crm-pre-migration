@@ -19,6 +19,62 @@ Out of scope:
 
 ---
 
+## Screenshot addendum, 2026-04-14
+These notes come from the screenshot set under `docs/pictures/` and should shape the V1 redesign so it stays visually and operationally close to the target UX where that UX is visible.
+
+### Screenshot files reviewed
+- `new job creation.png`
+- `new job creation2.png`
+- `scheduler day view.png`
+- `scheduler day view create new job.png`
+- `scheduler month view.png`
+
+### Important coverage limitation
+- The screenshot set currently has strong coverage for scheduler and job-creation flows.
+- It does **not** contain direct customer-list or customer-detail screenshots.
+- Because of that, customer module redesign should stay anchored to `docs/spec/10-customers.md`, while scheduler/job composition can lean more heavily on screenshot-confirmed layout.
+
+### Must-preserve scheduler characteristics from screenshots
+- Scheduler is not just a simple list. It is a true lane-based board with:
+  - persistent left rail
+  - mini month navigator
+  - employee filters
+  - horizontal time grid
+  - visible lane headers for `Unassigned` and active teams
+- Day view should feel like a dispatch surface first, not a generic agenda list.
+- Month view still keeps the left rail visible and shows stacked compact event bars inside day cells.
+- The global app shell includes an always-visible `New` action from which scheduler-related creation starts.
+
+### Must-preserve create-job characteristics from screenshots
+- `New job` should be a dedicated create workflow, not a tiny inline form.
+- The visible target layout is a two-column composition:
+  - left: customer and schedule controls
+  - right: private notes and line items
+- Line items should feel like a real pricing/work-order module with:
+  - services section
+  - materials section
+  - subtotal/tax/total summary
+  - explicit price-book entry points
+- Customer selection should stay embedded in the job create flow and expose `+ New customer` inline.
+- Notes should visibly support scope switching between `This job` and `Customer`.
+
+### Must-preserve schedule-from-grid characteristics from screenshots
+- `Schedule a time for Job` is a dedicated scheduling flow, not only a passive modal with a couple of inputs.
+- The target interaction visibly combines:
+  - a left scheduling form
+  - the actual day grid on the right
+- Team selection, arrival window, repeat controls, and end conditions live in the left form column.
+- The job being placed should remain visually anchored to the live board while scheduling.
+
+### Practical redesign consequence
+- Even if V1 does not implement every source-system feature, the redesign should keep the same **interaction posture**:
+  - operational, board-first scheduler
+  - serious create-job workspace
+  - inline path from scheduling into job creation
+  - customer lookup/creation directly inside job creation
+
+---
+
 ## Brutal assessment of the current UI
 The current UI is functional, but it is not a serious CRM module experience.
 

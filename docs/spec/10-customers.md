@@ -74,6 +74,34 @@ Customer records store contact, address, operational, and billing context, and a
   - `Cancel`
   - `create customer`
 
+## Screenshot addendum, 2026-04-14
+### Observed coverage note
+- The screenshot set currently in `docs/pictures` does **not** include a direct customer-list, customer-detail, or add-customer screen.
+- Customer-related evidence from the screenshot set is limited to customer selection and note scoping inside job creation / scheduling flows.
+
+### Hard requirements
+- New job creation includes a customer search field with placeholder text truncated as:
+  - `Name, email, phone, or addre...`
+- New job creation exposes an inline customer creation entry point:
+  - `+ New customer`
+- Job private notes UI visibly separates note scope with a segmented toggle:
+  - `This job`
+  - `Customer`
+
+### Implementation notes
+- Customer lookup inside job creation should be treated as a broad search surface, not a narrow id-only selector.
+- The observed lookup affordance suggests search by at least:
+  - name
+  - email
+  - phone
+  - address
+- The `+ New customer` affordance should remain available from job creation so dispatch/sales workflows do not require leaving the job flow.
+
+## OPEN_QUESTION
+- No direct screenshot evidence currently confirms the exact customer list layout, detail layout, or add-customer modal composition for the source UI set in `docs/pictures`.
+- The exact behavior of `+ New customer` from the job flow is not visible, it may open a modal, drawer, or dedicated create screen.
+- The exact persistence semantics of the `This job` vs `Customer` private-note toggle are not visible from the screenshot alone.
+
 ## Validation and behavior
 ### Hard requirements
 - Tags are entered via text and converted into chips.
