@@ -350,6 +350,81 @@ test('operational job list supports unscheduled queue and preserves assignee aft
   });
 });
 
+test('recurrence rule changes require this_and_future scope', async () => {
+  const context = createContext();
+  const app = createApp({ staticRoot, context });
+
+  await withServer(app, async (baseUrl) => {
+    const customerResponse = await fetch(`${baseUrl}/api/customers`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        displayName: 'Recurring Scope Customer',
+        customerType: 'Homeowner',
+        street: '1 Main',
+        city: 'Austin',
+        state: 'TX',
+        zip: '73301',
+      }),
+    });
+    const customerPayload = await customerResponse.json();
+    const customerId = customerPayload.item.id;
+    const addressId = customerPayload.item.addresses[0].id;
+
+    const jobResponse = await fetch(`${baseUrl}/api/customers/${customerId}/jobs`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        titleOrServiceSummary: 'Recurring visit',
+        customerAddressId: addressId,
+      }),
+    });
+    const jobPayload = await jobResponse.json();
+    const jobId = jobPayload.item.id;
+
+    await fetch(`${baseUrl}/api/jobs/${jobId}/schedule`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        scheduledStartAt: '2026-04-15T09:00:00.000Z',
+        scheduledEndAt: '2026-04-15T10:00:00.000Z',
+      }),
+    });
+
+    const enableResponse = await fetch(`${baseUrl}/api/jobs/${jobId}/recurrence`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        recurrenceFrequency: 'weekly',
+        recurrenceInterval: 1,
+        recurrenceDayOfWeek: ['WED'],
+        recurrenceEndMode: 'after_n_occurrences',
+        recurrenceOccurrenceCount: 4,
+      }),
+    });
+    assert.equal(enableResponse.status, 201);
+
+    const editResponse = await fetch(`${baseUrl}/api/jobs/${jobId}/occurrence-edit`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        scope: 'this',
+        recurrenceRule: {
+          recurrenceFrequency: 'monthly',
+          recurrenceInterval: 1,
+          recurrenceDayOfMonth: 15,
+          recurrenceEndMode: 'after_n_occurrences',
+          recurrenceOccurrenceCount: 3,
+        },
+      }),
+    });
+    const editPayload = await editResponse.json();
+
+    assert.equal(editResponse.status, 400);
+    assert.equal(editPayload.error.code, 'RECURRENCE_SCOPE_REQUIRES_FUTURE');
+  });
+});
+
 test('unsupported recurrence and invoice fields are rejected explicitly', async () => {
   const context = createContext();
   const app = createApp({ staticRoot, context });

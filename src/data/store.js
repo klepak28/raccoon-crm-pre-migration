@@ -7,16 +7,19 @@ export function createStore() {
   const nextEmailId = createIdGenerator('email');
   const nextJobId = createIdGenerator('job');
   const nextTeamMemberId = createIdGenerator('tm');
+  const nextRecurringSeriesId = createIdGenerator('rseries');
 
   return {
     customers: [],
     jobs: [],
     teamMembers: [],
+    recurringSeries: [],
     nextCustomerId,
     nextAddressId,
     nextPhoneId,
     nextEmailId,
     nextJobId,
     nextTeamMemberId,
+    nextRecurringSeriesId,
   };
 }

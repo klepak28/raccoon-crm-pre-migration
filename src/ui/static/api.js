@@ -46,4 +46,15 @@ export const api = {
   getScheduleRange: async (startDate, endDate) => (
     await getJson(`/api/schedule/range?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`)
   ).item,
+  // Recurring jobs
+  createRecurringJob: async (payload) => (await sendJson('/api/recurring-jobs', payload)).item,
+  enableRecurrence: async (jobId, recurrenceRule) => (await sendJson(`/api/jobs/${jobId}/recurrence`, recurrenceRule)).item,
+  getSeriesDetail: async (seriesId) => (await getJson(`/api/recurring-series/${seriesId}`)).item,
+  getSeriesForJob: async (jobId) => (await getJson(`/api/jobs/${jobId}/series`)).item,
+  editOccurrence: async (jobId, scope, changes, recurrenceRule) => (
+    await sendJson(`/api/jobs/${jobId}/occurrence-edit`, { scope, changes, recurrenceRule })
+  ).item,
+  deleteOccurrence: async (jobId, scope) => (
+    await sendJson(`/api/jobs/${jobId}/occurrence-delete`, { scope })
+  ).item,
 };

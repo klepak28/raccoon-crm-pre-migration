@@ -63,6 +63,11 @@ async function renderRoute() {
     return;
   }
 
+  if (pathname === '/app/recurring_jobs/new') {
+    await renderNewRecurringJobPage();
+    return;
+  }
+
   const customerMatch = pathname.match(/^\/app\/customers\/([^/]+)$/);
   if (customerMatch) {
     await renderCustomerDetailPage(customerMatch[1]);
@@ -122,10 +127,10 @@ function renderShell({ title, subtitle = '', nav = 'customers', breadcrumbs = []
                 <strong>Job</strong>
                 <span>Create a one-time job</span>
               </a>
-              <button class="new-menu-item" type="button" data-new-action="recurring">
+              <a class="new-menu-item" href="/app/recurring_jobs/new" data-new-action="recurring">
                 <strong>Recurring job</strong>
-                <span>Unsupported in V1</span>
-              </button>
+                <span>Create a recurring job series</span>
+              </a>
               <button class="new-menu-item" type="button" data-new-action="estimate">
                 <strong>Estimate</strong>
                 <span>Unsupported in V1</span>
@@ -982,8 +987,9 @@ async function renderJobSchedulePage(jobId) {
   const params = new URLSearchParams(location.search);
   const job = await api.getJob(jobId);
   const focusDate = params.get('date') || formatDayKey(new Date(job.scheduledStartAt || new Date()));
-  const [schedule] = await Promise.all([
+  const [schedule, seriesInfo] = await Promise.all([
     api.getScheduleRange(focusDate, focusDate),
+    job.isRecurring ? api.getSeriesForJob(jobId) : Promise.resolve(null),
   ]);
   const returnTo = getSchedulerContext(location.search);
 
@@ -1039,9 +1045,78 @@ async function renderJobSchedulePage(jobId) {
               <option>Use scheduled arrival for selected team</option>
             </select>
           </label>
-          <div class="stack-gap schedule-disabled-block">
+          <div class="stack-gap">
             <div class="label">Repeats</div>
-            <button class="button button-ghost scheduler-unsupported-pill" type="button" data-shell-action="repeats">Recurring scheduling is visible in the target flow, but unsupported in V1</button>
+            <select name="recurrencePreset" id="recurrence-preset">
+              <option value="none">Does not repeat</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="yearly">Yearly</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+          <div id="recurrence-custom-section" hidden>
+            <div class="form-grid two-columns">
+              <label>
+                <span>Repeats every</span>
+                <input name="recurrenceInterval" type="number" value="1" min="1" max="999" />
+              </label>
+              <label>
+                <span>Unit</span>
+                <select name="recurrenceFrequency">
+                  <option value="daily">Day</option>
+                  <option value="weekly">Week</option>
+                  <option value="monthly">Month</option>
+                  <option value="yearly">Year</option>
+                </select>
+              </label>
+            </div>
+            <div id="recurrence-weekday-chips" class="chip-row" hidden>
+              <span class="label">Repeats on</span>
+              ${['SUN','MON','TUE','WED','THU','FRI','SAT'].map((d) => `<label class="chip-toggle"><input type="checkbox" name="recurrenceDayOfWeek" value="${d}" /><span>${d}</span></label>`).join('')}
+            </div>
+            <div id="recurrence-monthly-mode" hidden>
+              <label>
+                <span>Monthly mode</span>
+                <select name="monthlyMode">
+                  <option value="dayOfMonth">Day of month</option>
+                  <option value="ordinal">Ordinal weekday</option>
+                </select>
+              </label>
+              <div id="recurrence-day-of-month-section">
+                <label>
+                  <span>Day of month</span>
+                  <input name="recurrenceDayOfMonth" type="number" min="1" max="31" value="1" />
+                </label>
+              </div>
+              <div id="recurrence-ordinal-section" hidden>
+                <div class="form-grid two-columns">
+                  <label>
+                    <span>Ordinal</span>
+                    <select name="recurrenceOrdinal">
+                      <option value="first">First</option>
+                      <option value="second">Second</option>
+                      <option value="third">Third</option>
+                      <option value="fourth">Fourth</option>
+                      <option value="last">Last</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Day</span>
+                    <select name="recurrenceOrdinalDay">
+                      ${['SUN','MON','TUE','WED','THU','FRI','SAT'].map((d) => `<option value="${d}">${d}</option>`).join('')}
+                    </select>
+                  </label>
+                </div>
+              </div>
+            </div>
+            <fieldset class="stack-gap-sm">
+              <legend>Ends</legend>
+              <label class="radio-row"><input type="radio" name="recurrenceEndMode" value="never" checked /> Never</label>
+              <label class="radio-row"><input type="radio" name="recurrenceEndMode" value="after_n_occurrences" /> After <input type="number" name="recurrenceOccurrenceCount" value="10" min="1" class="inline-number" /> occurrences</label>
+              <label class="radio-row"><input type="radio" name="recurrenceEndMode" value="on_date" /> On <input type="date" name="recurrenceEndDate" class="inline-date" /></label>
+            </fieldset>
           </div>
           <div class="profile-grid">
             <div>
@@ -1091,8 +1166,16 @@ async function renderJobSchedulePage(jobId) {
   bindSchedulerQuickActions();
   bindCalendarCreateActions();
   bindCalendarDragAndDrop();
+  bindRecurrenceControls();
+  if (seriesInfo) {
+    populateRecurrenceForm(document.getElementById('schedule-route-form'), seriesInfo);
+  }
 
   document.getElementById('schedule-route-unschedule')?.addEventListener('click', async () => {
+    if (job.isRecurring) {
+      openDeleteOccurrenceModal(job);
+      return;
+    }
     if (!confirm('Undo the current schedule for this job?')) return;
     try {
       await api.unscheduleJob(job.id);
@@ -1111,11 +1194,47 @@ async function renderJobSchedulePage(jobId) {
       const start = form.querySelector('[name="scheduledStartAt"]').value;
       const end = form.querySelector('[name="scheduledEndAt"]').value;
       const teamMemberId = form.querySelector('[name="teamMemberId"]').value;
+      const recurrencePreset = form.querySelector('[name="recurrencePreset"]').value;
+      const nextStartAt = toIso(start);
+      const nextEndAt = toIso(end);
+
+      if (job.isRecurring) {
+        const recurrenceRule = buildRecurrencePayload(form);
+        if (!recurrenceRule) {
+          throw new Error('Recurring jobs cannot be switched to does not repeat from this screen. Use recurring delete scope actions instead.');
+        }
+
+        const changes = {};
+        if (nextStartAt !== job.scheduledStartAt) changes.scheduledStartAt = nextStartAt;
+        if (nextEndAt !== job.scheduledEndAt) changes.scheduledEndAt = nextEndAt;
+        if (teamMemberId !== (job.assigneeTeamMemberId || '')) changes.assigneeTeamMemberId = teamMemberId || null;
+
+        const recurrenceChanged = didRecurrenceRuleChange(seriesInfo, recurrenceRule);
+        if (!Object.keys(changes).length && !recurrenceChanged) {
+          setFlash('No recurring changes to save.', 'info');
+          location.href = buildJobUrl(job.id, location.pathname, location.search);
+          return;
+        }
+
+        const scope = await chooseRecurringEditScope({
+          title: `Save changes for ${job.jobNumber}`,
+          message: recurrenceChanged
+            ? 'Changing the repeat rule starts a new recurrence boundary from this job forward.'
+            : 'Choose whether these schedule changes affect only this occurrence or this occurrence and all future ones.',
+          allowThisScope: !recurrenceChanged,
+        });
+        if (!scope) return;
+
+        await api.editOccurrence(job.id, scope, changes, recurrenceChanged ? recurrenceRule : undefined);
+        setFlash(scope === 'this' ? 'Occurrence updated.' : 'Recurring schedule updated from this job forward.', 'success');
+        location.href = buildJobUrl(job.id, location.pathname, location.search);
+        return;
+      }
 
       if (!job.customer.doNotService) {
         await api.scheduleJob(job.id, {
-          scheduledStartAt: toIso(start),
-          scheduledEndAt: toIso(end),
+          scheduledStartAt: nextStartAt,
+          scheduledEndAt: nextEndAt,
         });
       }
 
@@ -1125,7 +1244,14 @@ async function renderJobSchedulePage(jobId) {
         await api.unassignJob(job.id);
       }
 
-      setFlash('Schedule updated.', 'success');
+      if (recurrencePreset !== 'none' && !job.isRecurring) {
+        const recurrenceRule = buildRecurrencePayload(form);
+        await api.enableRecurrence(job.id, recurrenceRule);
+        setFlash('Schedule updated with recurrence.', 'success');
+      } else {
+        setFlash('Schedule updated.', 'success');
+      }
+
       location.href = buildJobUrl(job.id, location.pathname, location.search);
     } catch (error) {
       statusRegion.innerHTML = statusMessage(error.message, 'danger');
@@ -1136,12 +1262,14 @@ async function renderJobSchedulePage(jobId) {
 async function renderJobDetailPage(jobId) {
   const job = await api.getJob(jobId);
   const customer = await api.getCustomer(job.customer.id);
+  const seriesInfo = job.isRecurring ? await api.getSeriesForJob(jobId) : null;
   const schedulerContext = getSchedulerContext(location.search);
   const returnLabel = schedulerContext ? 'Back to scheduler' : 'Back to customer';
   const returnHref = schedulerContext || `/app/customers/${job.customer.id}`;
+  const recurringLabel = job.isRecurring ? ` • Recurring #${job.occurrenceIndex ?? 1}` : '';
   renderShell({
     title: `${job.jobNumber} • ${job.titleOrServiceSummary}`,
-    subtitle: `${job.scheduleState === 'scheduled' ? 'Scheduled' : 'Unscheduled'} • ${job.assignee?.displayName || 'Unassigned'}`,
+    subtitle: `${job.scheduleState === 'scheduled' ? 'Scheduled' : 'Unscheduled'} • ${job.assignee?.displayName || 'Unassigned'}${recurringLabel}`,
     nav: schedulerContext ? 'scheduler' : 'customers',
     breadcrumbs: [
       `<a href="/app/customers/list">Customers</a>`,
@@ -1165,6 +1293,8 @@ async function renderJobDetailPage(jobId) {
                 ${job.scheduleState === 'scheduled' ? badge('Scheduled', 'success') : badge('Unscheduled', 'warning')}
                 ${job.assignee?.displayName ? badge(job.assignee.displayName, 'neutral') : badge('Unassigned', 'warning')}
                 ${job.customer.doNotService ? badge('Do not service', 'danger') : ''}
+                ${job.isRecurring ? badge('Recurring', 'info') : ''}
+                ${job.isExceptionInstance ? badge('Exception', 'warning') : ''}
               </div>
             </div>
             <div class="profile-grid">
@@ -1235,15 +1365,49 @@ async function renderJobDetailPage(jobId) {
             <div class="stat-row"><span>Address</span><strong>${escapeHtml(formatAddress(job.address) || 'No address')}</strong></div>
             <div class="stat-row"><span>Last updated</span><strong>${escapeHtml(formatDateTime(job.updatedAt))}</strong></div>
           </div>
+          ${job.isRecurring && seriesInfo ? `
+          <div class="surface-card stack-gap">
+            <h2 class="section-title">Recurring series</h2>
+            <div class="stat-row"><span>Frequency</span><strong>${escapeHtml(describeRecurrenceRuleUI(seriesInfo))}</strong></div>
+            <div class="stat-row"><span>Occurrence</span><strong>#${job.occurrenceIndex ?? 1}</strong></div>
+            <div class="stat-row"><span>End mode</span><strong>${escapeHtml(seriesInfo.recurrenceEndMode === 'never' ? 'Never' : seriesInfo.recurrenceEndMode === 'after_n_occurrences' ? 'After ' + seriesInfo.recurrenceOccurrenceCount + ' occurrences' : 'On ' + seriesInfo.recurrenceEndDate)}</strong></div>
+            ${job.isExceptionInstance ? '<div class="table-meta">This occurrence has been individually edited and differs from the series rule.</div>' : ''}
+            <div class="inline-actions">
+              <button class="button button-danger" id="delete-occurrence-button">Delete occurrence</button>
+            </div>
+          </div>
+          ` : ''}
         </aside>
       </section>
     `,
   });
 
-  document.getElementById('edit-job-button').addEventListener('click', () => openEditJobModal(job, customer));
-  document.getElementById('edit-team-button').addEventListener('click', () => openTeamModal(job));
-  document.getElementById('edit-team-inline-button').addEventListener('click', () => openTeamModal(job));
+  document.getElementById('edit-job-button').addEventListener('click', () => {
+    if (job.isRecurring) {
+      openRecurringEditScopeModal(job, customer, seriesInfo);
+    } else {
+      openEditJobModal(job, customer);
+    }
+  });
+  document.getElementById('edit-team-button').addEventListener('click', () => {
+    if (job.isRecurring) {
+      openRecurringTeamScopeModal(job);
+    } else {
+      openTeamModal(job);
+    }
+  });
+  document.getElementById('edit-team-inline-button').addEventListener('click', () => {
+    if (job.isRecurring) {
+      openRecurringTeamScopeModal(job);
+    } else {
+      openTeamModal(job);
+    }
+  });
   document.getElementById('unassign-job-inline-button')?.addEventListener('click', async () => {
+    if (job.isRecurring) {
+      openRecurringTeamScopeModal(job, '');
+      return;
+    }
     try {
       await api.unassignJob(job.id);
       setFlash('Assignment updated.', 'success');
@@ -1253,6 +1417,10 @@ async function renderJobDetailPage(jobId) {
     }
   });
   document.getElementById('unschedule-job-button').addEventListener('click', async () => {
+    if (job.isRecurring) {
+      openDeleteOccurrenceModal(job);
+      return;
+    }
     if (!confirm('Undo the current schedule for this job?')) return;
     try {
       await api.unscheduleJob(job.id);
@@ -1261,6 +1429,9 @@ async function renderJobDetailPage(jobId) {
     } catch (error) {
       showTransientPageNotice(error.message, 'danger');
     }
+  });
+  document.getElementById('delete-occurrence-button')?.addEventListener('click', () => {
+    openDeleteOccurrenceModal(job);
   });
 }
 
@@ -1283,7 +1454,7 @@ async function renderSchedulerPage() {
 
   renderShell({
     title: 'Scheduler',
-    subtitle: `One-time jobs only. ${rangeLabel}`,
+    subtitle: rangeLabel,
     nav: 'scheduler',
     breadcrumbs: [escapeHtml('Scheduler')],
     actions: `
@@ -2387,9 +2558,10 @@ function compareJobs(left, right) {
 }
 
 function renderDayEventCard(job) {
+  const recurringIcon = job.isRecurring ? '<span class="recurring-icon" title="Recurring">&#x1f501;</span>' : '';
   return `
     <a class="calendar-event draggable-job ${!job.assigneeTeamMemberId ? 'is-unassigned' : ''}" draggable="true" data-calendar-job-id="${job.id}" ${colorStyleAttr(job.assignmentColor, '--team-color')} href="${buildJobUrl(job.id, location.pathname, location.search)}">
-      <div class="calendar-event-time">${escapeHtml(formatTime(job.scheduledStartAt))} to ${escapeHtml(formatTime(job.scheduledEndAt))}</div>
+      <div class="calendar-event-time">${escapeHtml(formatTime(job.scheduledStartAt))} to ${escapeHtml(formatTime(job.scheduledEndAt))} ${recurringIcon}</div>
       <div class="calendar-event-title">${escapeHtml(job.titleOrServiceSummary)}</div>
       <div class="calendar-event-meta">${escapeHtml(job.customer?.displayName || 'Unknown customer')}</div>
     </a>
@@ -2397,10 +2569,11 @@ function renderDayEventCard(job) {
 }
 
 function renderMonthEventBar(job) {
+  const recurringIcon = job.isRecurring ? ' &#x1f501;' : '';
   return `
     <a class="month-event-bar ${!job.assigneeTeamMemberId ? 'is-unassigned' : ''}" ${colorStyleAttr(job.assignmentColor, '--team-color')} href="${buildJobUrl(job.id, location.pathname, location.search)}">
       <span class="month-event-time">${escapeHtml(formatTime(job.scheduledStartAt))}</span>
-      <span class="month-event-label">${escapeHtml(job.titleOrServiceSummary)}</span>
+      <span class="month-event-label">${escapeHtml(job.titleOrServiceSummary)}${recurringIcon}</span>
     </a>
   `;
 }
@@ -2429,6 +2602,662 @@ function showTransientPageNotice(message, tone = 'info') {
   wrapper.className = 'notice-inline';
   wrapper.innerHTML = statusMessage(message, tone);
   region.prepend(wrapper);
+}
+
+// ── Recurring Jobs UI ──
+
+async function renderNewRecurringJobPage() {
+  const [customers] = await Promise.all([api.listCustomers()]);
+  renderShell({
+    title: 'New recurring job',
+    nav: 'scheduler',
+    breadcrumbs: ['<a href="/app/calendar_new">Scheduler</a>', 'New recurring job'],
+    actions: `
+      <a class="button button-ghost" href="/app/calendar_new">Cancel</a>
+      <button class="button button-primary" form="recurring-job-form" type="submit">Save recurring job</button>
+    `,
+    content: `
+      <form id="recurring-job-form" class="surface-card stack-gap modal-form">
+        <h2 class="section-title">Customer and service</h2>
+        <label>
+          <span>Customer</span>
+          <select name="customerId" id="recurring-customer-select" required>
+            <option value="">Select customer</option>
+            ${customers.map((c) => `<option value="${c.id}">${escapeHtml(c.displayName)}</option>`).join('')}
+          </select>
+        </label>
+        <label>
+          <span>Address</span>
+          <select name="customerAddressId" id="recurring-address-select" required disabled>
+            <option value="">Select customer first</option>
+          </select>
+        </label>
+        <label>
+          <span>Service summary</span>
+          <input name="titleOrServiceSummary" required placeholder="e.g., Home Cleaning" />
+        </label>
+        <label>
+          <span>Lead source</span>
+          <input name="leadSource" />
+        </label>
+        <label>
+          <span>Tags</span>
+          <input name="tags" placeholder="tag1, tag2" />
+        </label>
+        <label>
+          <span>Private notes</span>
+          <textarea name="privateNotes"></textarea>
+        </label>
+
+        <h2 class="section-title">Schedule</h2>
+        <div class="form-grid two-columns">
+          <label>
+            <span>From</span>
+            <input name="scheduledStartAt" type="datetime-local" required />
+          </label>
+          <label>
+            <span>To</span>
+            <input name="scheduledEndAt" type="datetime-local" required />
+          </label>
+        </div>
+        <label>
+          <span>Team member</span>
+          <select name="assigneeTeamMemberId">
+            <option value="">Unassigned</option>
+            ${getActiveTeamMembers().map((m) => `<option value="${m.id}">${escapeHtml(m.displayName)}</option>`).join('')}
+          </select>
+        </label>
+
+        <h2 class="section-title">Recurrence</h2>
+        <select name="recurrencePreset" id="recurrence-preset">
+          <option value="daily">Daily</option>
+          <option value="weekly" selected>Weekly</option>
+          <option value="monthly">Monthly</option>
+          <option value="yearly">Yearly</option>
+          <option value="custom">Custom</option>
+        </select>
+        <div id="recurrence-custom-section" hidden>
+          <div class="form-grid two-columns">
+            <label>
+              <span>Repeats every</span>
+              <input name="recurrenceInterval" type="number" value="1" min="1" max="999" />
+            </label>
+            <label>
+              <span>Unit</span>
+              <select name="recurrenceFrequency">
+                <option value="daily">Day</option>
+                <option value="weekly">Week</option>
+                <option value="monthly">Month</option>
+                <option value="yearly">Year</option>
+              </select>
+            </label>
+          </div>
+          <div id="recurrence-weekday-chips" class="chip-row" hidden>
+            <span class="label">Repeats on</span>
+            ${['SUN','MON','TUE','WED','THU','FRI','SAT'].map((d) => `<label class="chip-toggle"><input type="checkbox" name="recurrenceDayOfWeek" value="${d}" /><span>${d}</span></label>`).join('')}
+          </div>
+          <div id="recurrence-monthly-mode" hidden>
+            <label>
+              <span>Monthly mode</span>
+              <select name="monthlyMode">
+                <option value="dayOfMonth">Day of month</option>
+                <option value="ordinal">Ordinal weekday</option>
+              </select>
+            </label>
+            <div id="recurrence-day-of-month-section">
+              <label>
+                <span>Day of month</span>
+                <input name="recurrenceDayOfMonth" type="number" min="1" max="31" value="1" />
+              </label>
+            </div>
+            <div id="recurrence-ordinal-section" hidden>
+              <div class="form-grid two-columns">
+                <label>
+                  <span>Ordinal</span>
+                  <select name="recurrenceOrdinal">
+                    <option value="first">First</option>
+                    <option value="second">Second</option>
+                    <option value="third">Third</option>
+                    <option value="fourth">Fourth</option>
+                    <option value="last">Last</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Day</span>
+                  <select name="recurrenceOrdinalDay">
+                    ${['SUN','MON','TUE','WED','THU','FRI','SAT'].map((d) => `<option value="${d}">${d}</option>`).join('')}
+                  </select>
+                </label>
+              </div>
+            </div>
+          </div>
+          <fieldset class="stack-gap-sm">
+            <legend>Ends</legend>
+            <label class="radio-row"><input type="radio" name="recurrenceEndMode" value="never" checked /> Never</label>
+            <label class="radio-row"><input type="radio" name="recurrenceEndMode" value="after_n_occurrences" /> After <input type="number" name="recurrenceOccurrenceCount" value="10" min="1" class="inline-number" /> occurrences</label>
+            <label class="radio-row"><input type="radio" name="recurrenceEndMode" value="on_date" /> On <input type="date" name="recurrenceEndDate" class="inline-date" /></label>
+          </fieldset>
+        </div>
+
+        <div id="recurring-job-status"></div>
+        <div class="modal-actions">
+          <a class="button button-ghost" href="/app/calendar_new">Cancel</a>
+          <button type="submit" class="button button-primary">Save recurring job</button>
+        </div>
+      </form>
+    `,
+  });
+
+  bindRecurrenceControls();
+
+  // Customer -> address cascade
+  const customerSelect = document.getElementById('recurring-customer-select');
+  const addressSelect = document.getElementById('recurring-address-select');
+  customerSelect.addEventListener('change', async () => {
+    const customerId = customerSelect.value;
+    if (!customerId) {
+      addressSelect.innerHTML = '<option value="">Select customer first</option>';
+      addressSelect.disabled = true;
+      return;
+    }
+    try {
+      const customer = await api.getCustomer(customerId);
+      addressSelect.innerHTML = customer.addresses.map((a) =>
+        `<option value="${a.id}">${escapeHtml(formatAddress(a))}</option>`
+      ).join('');
+      addressSelect.disabled = false;
+    } catch {
+      addressSelect.innerHTML = '<option value="">Error loading addresses</option>';
+    }
+  });
+
+  document.getElementById('recurring-job-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const statusRegion = document.getElementById('recurring-job-status');
+    try {
+      const data = new FormData(form);
+      const recurrenceRule = buildRecurrencePayload(form);
+      const payload = {
+        customerId: data.get('customerId'),
+        job: {
+          titleOrServiceSummary: data.get('titleOrServiceSummary'),
+          customerAddressId: data.get('customerAddressId'),
+          leadSource: data.get('leadSource'),
+          privateNotes: data.get('privateNotes'),
+          tags: splitTags(data.get('tags')),
+        },
+        schedule: {
+          scheduledStartAt: toIso(data.get('scheduledStartAt')),
+          scheduledEndAt: toIso(data.get('scheduledEndAt')),
+          assigneeTeamMemberId: data.get('assigneeTeamMemberId') || undefined,
+        },
+        recurrence: recurrenceRule,
+      };
+      const result = await api.createRecurringJob(payload);
+      setFlash(`Recurring job created. ${result.generatedCount} occurrences generated.`, 'success');
+      location.href = buildJobUrl(result.sourceJob.id, location.pathname, location.search);
+    } catch (error) {
+      statusRegion.innerHTML = statusMessage(error.message, 'danger');
+    }
+  });
+}
+
+function bindRecurrenceControls() {
+  const preset = document.getElementById('recurrence-preset');
+  const customSection = document.getElementById('recurrence-custom-section');
+  if (!preset || !customSection) return;
+
+  const freqSelect = customSection.querySelector('[name="recurrenceFrequency"]');
+  const weekdayChips = document.getElementById('recurrence-weekday-chips');
+  const monthlyMode = document.getElementById('recurrence-monthly-mode');
+  const monthlyModeSelect = customSection.querySelector('[name="monthlyMode"]');
+  const dayOfMonthSection = document.getElementById('recurrence-day-of-month-section');
+  const ordinalSection = document.getElementById('recurrence-ordinal-section');
+
+  function syncPreset() {
+    const val = preset.value;
+    if (val === 'none') {
+      customSection.hidden = true;
+      return;
+    }
+    if (val === 'custom') {
+      customSection.hidden = false;
+      syncFrequency();
+      return;
+    }
+    // Preset maps to a simple rule
+    customSection.hidden = false;
+    if (freqSelect) freqSelect.value = val;
+    const intervalInput = customSection.querySelector('[name="recurrenceInterval"]');
+    if (intervalInput) intervalInput.value = '1';
+    syncFrequency();
+  }
+
+  function syncFrequency() {
+    const freq = freqSelect?.value || 'weekly';
+    const isWeekly = freq === 'weekly';
+    const supportsDayPattern = freq === 'monthly' || freq === 'yearly';
+    if (weekdayChips) weekdayChips.hidden = !isWeekly;
+    if (monthlyMode) monthlyMode.hidden = !supportsDayPattern;
+  }
+
+  function syncMonthlyMode() {
+    const mode = monthlyModeSelect?.value || 'dayOfMonth';
+    if (dayOfMonthSection) dayOfMonthSection.hidden = mode !== 'dayOfMonth';
+    if (ordinalSection) ordinalSection.hidden = mode !== 'ordinal';
+  }
+
+  preset.addEventListener('change', syncPreset);
+  freqSelect?.addEventListener('change', syncFrequency);
+  monthlyModeSelect?.addEventListener('change', syncMonthlyMode);
+
+  syncPreset();
+  syncMonthlyMode();
+}
+
+function buildRecurrencePayload(form) {
+  const data = new FormData(form);
+  const preset = data.get('recurrencePreset');
+  if (preset === 'none') return null;
+
+  let frequency = data.get('recurrenceFrequency') || preset;
+  if (['daily', 'weekly', 'monthly', 'yearly'].includes(preset) && preset !== 'custom') {
+    frequency = preset;
+  }
+
+  const interval = Number(data.get('recurrenceInterval')) || 1;
+  const endMode = data.get('recurrenceEndMode') || 'never';
+
+  const rule = {
+    recurrenceFrequency: frequency,
+    recurrenceInterval: interval,
+    recurrenceEndMode: endMode,
+  };
+
+  if (endMode === 'after_n_occurrences') {
+    rule.recurrenceOccurrenceCount = Number(data.get('recurrenceOccurrenceCount')) || 10;
+  }
+  if (endMode === 'on_date') {
+    rule.recurrenceEndDate = data.get('recurrenceEndDate');
+  }
+
+  if (frequency === 'weekly') {
+    rule.recurrenceDayOfWeek = data.getAll('recurrenceDayOfWeek');
+  }
+
+  if (frequency === 'monthly') {
+    const monthlyMode = data.get('monthlyMode') || 'dayOfMonth';
+    if (monthlyMode === 'ordinal') {
+      rule.recurrenceOrdinal = data.get('recurrenceOrdinal');
+      rule.recurrenceDayOfWeek = [data.get('recurrenceOrdinalDay')];
+    } else {
+      rule.recurrenceDayOfMonth = Number(data.get('recurrenceDayOfMonth')) || 1;
+    }
+  }
+
+  if (frequency === 'yearly') {
+    const monthlyMode = data.get('monthlyMode') || 'dayOfMonth';
+    if (monthlyMode === 'ordinal') {
+      rule.recurrenceOrdinal = data.get('recurrenceOrdinal');
+      rule.recurrenceDayOfWeek = [data.get('recurrenceOrdinalDay')];
+    } else {
+      rule.recurrenceDayOfMonth = Number(data.get('recurrenceDayOfMonth')) || new Date().getDate();
+    }
+    const monthIndex = new Date(form.querySelector('[name="scheduledStartAt"]')?.value || Date.now()).getMonth();
+    rule.recurrenceMonthOfYear = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'][monthIndex];
+  }
+
+  return rule;
+}
+
+function populateRecurrenceForm(form, series) {
+  if (!form || !series) return;
+  const preset = form.querySelector('[name="recurrencePreset"]');
+  const frequency = form.querySelector('[name="recurrenceFrequency"]');
+  const interval = form.querySelector('[name="recurrenceInterval"]');
+  const monthlyMode = form.querySelector('[name="monthlyMode"]');
+  const dayOfMonth = form.querySelector('[name="recurrenceDayOfMonth"]');
+  const ordinal = form.querySelector('[name="recurrenceOrdinal"]');
+  const ordinalDay = form.querySelector('[name="recurrenceOrdinalDay"]');
+  const endMode = form.querySelector(`[name="recurrenceEndMode"][value="${series.recurrenceEndMode}"]`);
+  const occurrenceCount = form.querySelector('[name="recurrenceOccurrenceCount"]');
+  const endDate = form.querySelector('[name="recurrenceEndDate"]');
+
+  if (preset) {
+    preset.value = series.recurrenceInterval === 1 ? series.recurrenceFrequency : 'custom';
+    preset.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  if (frequency) {
+    frequency.value = series.recurrenceFrequency;
+    frequency.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  if (interval) interval.value = String(series.recurrenceInterval || 1);
+  if (series.recurrenceOrdinal && monthlyMode) {
+    monthlyMode.value = 'ordinal';
+    monthlyMode.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  if (dayOfMonth && series.recurrenceDayOfMonth) dayOfMonth.value = String(series.recurrenceDayOfMonth);
+  if (ordinal && series.recurrenceOrdinal) ordinal.value = series.recurrenceOrdinal;
+  if (ordinalDay && series.recurrenceDayOfWeek?.[0]) ordinalDay.value = series.recurrenceDayOfWeek[0];
+  form.querySelectorAll('[name="recurrenceDayOfWeek"]').forEach((input) => {
+    input.checked = (series.recurrenceDayOfWeek || []).includes(input.value);
+  });
+  if (endMode) endMode.checked = true;
+  if (occurrenceCount && series.recurrenceOccurrenceCount) occurrenceCount.value = String(series.recurrenceOccurrenceCount);
+  if (endDate && series.recurrenceEndDate) endDate.value = series.recurrenceEndDate;
+}
+
+function didRecurrenceRuleChange(series, nextRule) {
+  if (!series && !nextRule) return false;
+  return JSON.stringify(normalizeRecurrenceRuleForCompare(series)) !== JSON.stringify(normalizeRecurrenceRuleForCompare(nextRule));
+}
+
+function normalizeRecurrenceRuleForCompare(rule) {
+  if (!rule) return null;
+  return {
+    recurrenceFrequency: rule.recurrenceFrequency || null,
+    recurrenceInterval: Number(rule.recurrenceInterval || 1),
+    recurrenceEndMode: rule.recurrenceEndMode || 'never',
+    recurrenceOccurrenceCount: rule.recurrenceOccurrenceCount ?? null,
+    recurrenceEndDate: rule.recurrenceEndDate || null,
+    recurrenceDayOfWeek: [...(rule.recurrenceDayOfWeek || [])].sort(),
+    recurrenceDayOfMonth: rule.recurrenceDayOfMonth ?? null,
+    recurrenceOrdinal: rule.recurrenceOrdinal || null,
+    recurrenceMonthOfYear: rule.recurrenceMonthOfYear || null,
+  };
+}
+
+function chooseRecurringEditScope({ title, message, allowThisScope = true }) {
+  return new Promise((resolve) => {
+    openModal({
+      title,
+      body: `
+        <div class="stack-gap">
+          <p>${escapeHtml(message)}</p>
+          <div class="inline-actions scope-actions">
+            ${allowThisScope ? '<button class="button button-primary" id="scope-choice-this">Only this job</button>' : ''}
+            <button class="button" id="scope-choice-future">This job and all future jobs</button>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="button button-ghost" id="close-modal-button">Cancel</button>
+          </div>
+        </div>
+      `,
+    });
+
+    document.getElementById('close-modal-button').addEventListener('click', () => {
+      closeModal();
+      resolve(null);
+    });
+    document.getElementById('scope-choice-this')?.addEventListener('click', () => {
+      closeModal();
+      resolve('this');
+    });
+    document.getElementById('scope-choice-future')?.addEventListener('click', () => {
+      closeModal();
+      resolve('this_and_future');
+    });
+  });
+}
+
+function describeRecurrenceRuleUI(series) {
+  if (!series) return 'None';
+  const freq = series.recurrenceFrequency;
+  const interval = series.recurrenceInterval;
+  switch (freq) {
+    case 'daily': return interval === 1 ? 'Daily' : `Every ${interval} days`;
+    case 'weekly': {
+      const days = (series.recurrenceDayOfWeek || []).join(', ');
+      const base = interval === 1 ? 'Weekly' : `Every ${interval} weeks`;
+      return days ? `${base} on ${days}` : base;
+    }
+    case 'monthly': {
+      const base = interval === 1 ? 'Monthly' : `Every ${interval} months`;
+      if (series.recurrenceOrdinal && series.recurrenceDayOfWeek?.length) {
+        return `${base} on the ${series.recurrenceOrdinal} ${series.recurrenceDayOfWeek[0]}`;
+      }
+      if (series.recurrenceDayOfMonth) return `${base} on day ${series.recurrenceDayOfMonth}`;
+      return base;
+    }
+    case 'yearly': return interval === 1 ? 'Yearly' : `Every ${interval} years`;
+    default: return 'Custom';
+  }
+}
+
+function openRecurringEditScopeModal(job, customer, seriesInfo) {
+  openModal({
+    title: `Edit ${job.jobNumber}`,
+    body: `
+      <div class="stack-gap">
+        <p>This job is part of a recurring series. How would you like to apply your changes?</p>
+        <div class="inline-actions scope-actions">
+          <button class="button button-primary" id="edit-scope-this">Only this job</button>
+          <button class="button" id="edit-scope-future">This job and all future jobs</button>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="button button-ghost" id="close-modal-button">Cancel</button>
+        </div>
+      </div>
+    `,
+  });
+
+  document.getElementById('close-modal-button').addEventListener('click', closeModal);
+  document.getElementById('edit-scope-this').addEventListener('click', () => {
+    closeModal();
+    openEditJobModalWithScope(job, customer, 'this');
+  });
+  document.getElementById('edit-scope-future').addEventListener('click', () => {
+    closeModal();
+    openEditJobModalWithScope(job, customer, 'this_and_future');
+  });
+}
+
+function openEditJobModalWithScope(job, customer, scope) {
+  openModal({
+    title: `Edit ${job.jobNumber} — ${scope === 'this' ? 'Only this job' : 'This and future jobs'}`,
+    body: `
+      <form id="edit-recurring-form" class="stack-gap modal-form">
+        <label>
+          <span>Service summary</span>
+          <input name="titleOrServiceSummary" value="${escapeHtml(job.titleOrServiceSummary)}" required />
+        </label>
+        <label>
+          <span>Address</span>
+          <select name="customerAddressId" required>
+            ${customer.addresses.map((address) => `
+              <option value="${address.id}" ${job.customerAddressId === address.id ? 'selected' : ''}>${escapeHtml(formatAddress(address))}</option>
+            `).join('')}
+          </select>
+        </label>
+        <label>
+          <span>Lead source</span>
+          <input name="leadSource" value="${escapeHtml(job.leadSource || '')}" />
+        </label>
+        <label>
+          <span>Tags</span>
+          <input name="tags" value="${escapeHtml((job.tags || []).join(', '))}" />
+        </label>
+        <label>
+          <span>Private notes</span>
+          <textarea name="privateNotes">${escapeHtml(job.privateNotes || '')}</textarea>
+        </label>
+        ${scope === 'this' ? `
+        <h3>Reschedule this occurrence</h3>
+        <div class="form-grid two-columns">
+          <label>
+            <span>Start</span>
+            <input name="scheduledStartAt" type="datetime-local" value="${job.scheduledStartAt ? escapeHtml(toDateTimeLocal(job.scheduledStartAt)) : ''}" />
+          </label>
+          <label>
+            <span>End</span>
+            <input name="scheduledEndAt" type="datetime-local" value="${job.scheduledEndAt ? escapeHtml(toDateTimeLocal(job.scheduledEndAt)) : ''}" />
+          </label>
+        </div>
+        ` : ''}
+        <label>
+          <span>Team member</span>
+          <select name="assigneeTeamMemberId">
+            <option value="">Unassigned</option>
+            ${getActiveTeamMembers().map((m) => `<option value="${m.id}" ${job.assigneeTeamMemberId === m.id ? 'selected' : ''}>${escapeHtml(m.displayName)}</option>`).join('')}
+          </select>
+        </label>
+        <div id="edit-recurring-status"></div>
+        <div class="modal-actions">
+          <button type="button" class="button button-ghost" id="close-modal-button">Cancel</button>
+          <button type="submit" class="button button-primary">Save changes</button>
+        </div>
+      </form>
+    `,
+  });
+
+  document.getElementById('close-modal-button').addEventListener('click', closeModal);
+  document.getElementById('edit-recurring-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const statusRegion = document.getElementById('edit-recurring-status');
+    try {
+      const data = new FormData(form);
+      const changes = {};
+      const title = data.get('titleOrServiceSummary');
+      if (title !== job.titleOrServiceSummary) changes.titleOrServiceSummary = title;
+
+      const customerAddressId = data.get('customerAddressId');
+      if (customerAddressId !== job.customerAddressId) changes.customerAddressId = customerAddressId;
+
+      const leadSource = data.get('leadSource') || '';
+      if (leadSource !== (job.leadSource || '')) changes.leadSource = leadSource;
+
+      const notes = data.get('privateNotes');
+      if (notes !== (job.privateNotes || '')) changes.privateNotes = notes;
+
+      const tags = splitTags(data.get('tags'));
+      if (JSON.stringify(tags) !== JSON.stringify(job.tags || [])) changes.tags = tags;
+
+      const teamMemberId = data.get('assigneeTeamMemberId');
+      if (teamMemberId !== (job.assigneeTeamMemberId || '')) {
+        changes.assigneeTeamMemberId = teamMemberId || null;
+      }
+
+      if (scope === 'this') {
+        const start = data.get('scheduledStartAt');
+        const end = data.get('scheduledEndAt');
+        if (start) changes.scheduledStartAt = toIso(start);
+        if (end) changes.scheduledEndAt = toIso(end);
+      }
+
+      await api.editOccurrence(job.id, scope, changes);
+      setFlash(scope === 'this' ? 'Occurrence updated.' : 'This and future occurrences updated.', 'success');
+      location.reload();
+    } catch (error) {
+      statusRegion.innerHTML = statusMessage(error.message, 'danger');
+    }
+  });
+}
+
+function openRecurringTeamScopeModal(job, initialTeamMemberId = job.assigneeTeamMemberId || '') {
+  openModal({
+    title: `${job.assignee?.displayName ? 'Reassign' : 'Assign'} ${job.jobNumber}`,
+    body: `
+      <div class="stack-gap">
+        <p>This job is part of a recurring series. How should assignment changes apply?</p>
+        <div class="inline-actions scope-actions">
+          <button class="button button-primary" id="team-scope-this">Only this job</button>
+          <button class="button" id="team-scope-future">This job and all future jobs</button>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="button button-ghost" id="close-modal-button">Cancel</button>
+        </div>
+      </div>
+    `,
+  });
+
+  document.getElementById('close-modal-button').addEventListener('click', closeModal);
+  document.getElementById('team-scope-this').addEventListener('click', () => {
+    closeModal();
+    openTeamModalWithScope(job, 'this', initialTeamMemberId);
+  });
+  document.getElementById('team-scope-future').addEventListener('click', () => {
+    closeModal();
+    openTeamModalWithScope(job, 'this_and_future', initialTeamMemberId);
+  });
+}
+
+function openTeamModalWithScope(job, scope, initialTeamMemberId = job.assigneeTeamMemberId || '') {
+  const activeTeamMembers = getActiveTeamMembers();
+  openModal({
+    title: `${job.assignee?.displayName ? 'Reassign' : 'Assign'} ${job.jobNumber} — ${scope === 'this' ? 'Only this job' : 'This and future jobs'}`,
+    body: `
+      <form id="team-scope-form" class="stack-gap modal-form">
+        <label>
+          <span>Team member</span>
+          <select name="teamMemberId">
+            <option value="" ${initialTeamMemberId ? '' : 'selected'}>Unassigned</option>
+            ${activeTeamMembers.map((m) => `<option value="${m.id}" ${initialTeamMemberId === m.id ? 'selected' : ''}>${escapeHtml(m.displayName)}</option>`).join('')}
+          </select>
+        </label>
+        <div id="team-scope-status"></div>
+        <div class="modal-actions">
+          <button type="button" class="button button-ghost" id="close-modal-button">Cancel</button>
+          <button type="submit" class="button button-primary">Save</button>
+        </div>
+      </form>
+    `,
+  });
+
+  document.getElementById('close-modal-button').addEventListener('click', closeModal);
+  document.getElementById('team-scope-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const teamMemberId = data.get('teamMemberId');
+    try {
+      await api.editOccurrence(job.id, scope, { assigneeTeamMemberId: teamMemberId || null });
+      setFlash(scope === 'this' ? 'Assignment updated for this occurrence.' : 'Assignment updated for this and future occurrences.', 'success');
+      location.reload();
+    } catch (error) {
+      document.getElementById('team-scope-status').innerHTML = statusMessage(error.message, 'danger');
+    }
+  });
+}
+
+function openDeleteOccurrenceModal(job) {
+  openModal({
+    title: `Delete occurrence ${job.jobNumber}`,
+    body: `
+      <div class="stack-gap">
+        <p>This job is part of a recurring series. What would you like to delete?</p>
+        <div class="inline-actions scope-actions">
+          <button class="button button-danger" id="delete-scope-this">This Occurrence</button>
+          <button class="button button-danger" id="delete-scope-future">This and Future Occurrences</button>
+        </div>
+        <div id="delete-occ-status"></div>
+        <div class="modal-actions">
+          <button type="button" class="button button-ghost" id="close-modal-button">Cancel</button>
+        </div>
+      </div>
+    `,
+  });
+
+  document.getElementById('close-modal-button').addEventListener('click', closeModal);
+  document.getElementById('delete-scope-this').addEventListener('click', async () => {
+    try {
+      await api.deleteOccurrence(job.id, 'this');
+      setFlash('Occurrence deleted.', 'success');
+      location.href = '/app/calendar_new';
+    } catch (error) {
+      document.getElementById('delete-occ-status').innerHTML = statusMessage(error.message, 'danger');
+    }
+  });
+  document.getElementById('delete-scope-future').addEventListener('click', async () => {
+    if (!confirm('Delete this occurrence and all future occurrences in the series?')) return;
+    try {
+      const result = await api.deleteOccurrence(job.id, 'this_and_future');
+      setFlash(`${result.deletedCount} occurrences deleted. Series truncated.`, 'success');
+      location.href = '/app/calendar_new';
+    } catch (error) {
+      document.getElementById('delete-occ-status').innerHTML = statusMessage(error.message, 'danger');
+    }
+  });
 }
 
 function renderFatal(error) {

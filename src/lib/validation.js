@@ -1,13 +1,6 @@
 import { httpError } from './http.js';
 
 export const UNSUPPORTED_V1_FIELDS = [
-  'recurrence',
-  'recurrenceRule',
-  'repeat',
-  'repeats',
-  'recurringSeriesId',
-  'occurrenceId',
-  'occurrence',
   'invoice',
   'invoiceId',
   'invoiceStatus',
@@ -18,6 +11,13 @@ export const UNSUPPORTED_V1_FIELDS = [
   'autoInvoice',
   'autoInvoiceRule',
   'invoiceReminderRule',
+  'recurrenceRule',
+  'recurrence',
+  'recurringSeriesId',
+  'occurrenceIndex',
+  'generatedFromRuleVersion',
+  'isExceptionInstance',
+  'deletedFromSeriesAt',
 ];
 
 export const MULTI_ASSIGNEE_V1_FIELDS = [

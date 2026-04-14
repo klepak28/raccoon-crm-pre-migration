@@ -53,6 +53,7 @@ export function createJobServices({ customerRepository, jobRepository, teamMembe
       return {
         ...job,
         assignmentState: job.assigneeTeamMemberId ? 'assigned' : 'unassigned',
+        isRecurring: Boolean(job.recurringSeriesId),
         customer: customer ? {
           id: customer.id,
           displayName: customer.displayName,
@@ -153,6 +154,10 @@ function toJobSummary(job, customerRepository, teamMemberRepository) {
     scheduledEndAt: job.scheduledEndAt,
     assigneeTeamMemberId: job.assigneeTeamMemberId,
     assignmentState: job.assigneeTeamMemberId ? 'assigned' : 'unassigned',
+    isRecurring: Boolean(job.recurringSeriesId),
+    recurringSeriesId: job.recurringSeriesId,
+    occurrenceIndex: job.occurrenceIndex,
+    isExceptionInstance: job.isExceptionInstance,
     assignee,
     customer: customer ? {
       id: customer.id,

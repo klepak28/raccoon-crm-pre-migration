@@ -6,6 +6,13 @@ import { validateJobListFilters } from '../validation/jobs/job-list-filters.vali
 import { validateScheduleJobInput } from '../validation/jobs/schedule-job.validator.js';
 import { validateTeamMemberInput } from '../validation/team-members/team-member-input.validator.js';
 import { assertNoMultiAssigneeFields, assertNoUnsupportedV1Fields } from '../lib/validation.js';
+import {
+  validateRecurrenceInput,
+  validateRecurringJobInput,
+  validateOccurrenceEditInput,
+  validateEditScope,
+  validateDeleteScope,
+} from '../validation/recurring-jobs/recurring-job-input.validator.js';
 
 function renderAppShell(title) {
   return `<!doctype html>
@@ -36,6 +43,7 @@ export async function handleRoute({ req, res, url, context }) {
     url.pathname === '/app/calendar_new' ||
     url.pathname === '/app/settings' ||
     url.pathname === '/app/jobs/new' ||
+    url.pathname === '/app/recurring_jobs/new' ||
     matchRoute(req.method, url.pathname, '/app/jobs/:jobId') ||
     matchRoute(req.method, url.pathname, '/app/jobs/:jobId/schedule') ||
     matchRoute(req.method, url.pathname, '/app/customers/:customerId')
@@ -173,6 +181,98 @@ export async function handleRoute({ req, res, url, context }) {
         url.searchParams.get('endDate'),
       ),
     });
+    return true;
+  }
+
+  // ── Recurring Jobs API ──
+
+  // POST /api/recurring-jobs — create from scratch (dedicated flow)
+  if (req.method === 'POST' && url.pathname === '/api/recurring-jobs') {
+    const body = await readJsonBody(req);
+    const jobInput = validateRecurringJobInput(body.job || body);
+    const scheduleInput = validateScheduleJobInput(body.schedule || body);
+    const recurrenceInput = validateRecurrenceInput(body.recurrence || body);
+    const customerId = body.customerId;
+    if (!customerId) {
+      sendJson(res, 400, { error: { code: 'CUSTOMER_ID_REQUIRED', message: 'customerId is required' } });
+      return true;
+    }
+    const result = services.recurringJobs.createRecurringJobFromScratch(
+      customerId, jobInput, scheduleInput, recurrenceInput,
+    );
+    sendJson(res, 201, { item: result });
+    return true;
+  }
+
+  // POST /api/jobs/:jobId/recurrence — enable recurrence on existing job
+  const recurrenceParams = matchRoute(req.method, url.pathname, '/api/jobs/:jobId/recurrence');
+  if (recurrenceParams && req.method === 'POST') {
+    const body = await readJsonBody(req);
+    const recurrenceInput = validateRecurrenceInput(body);
+    const result = services.recurringJobs.createRecurringSeries(recurrenceParams.jobId, recurrenceInput);
+    sendJson(res, 201, { item: result });
+    return true;
+  }
+
+  // GET /api/recurring-series/:seriesId — series detail with occurrences
+  const seriesDetailParams = matchRoute(req.method, url.pathname, '/api/recurring-series/:seriesId');
+  if (seriesDetailParams && req.method === 'GET') {
+    sendJson(res, 200, { item: services.recurringJobs.getSeriesDetail(seriesDetailParams.seriesId) });
+    return true;
+  }
+
+  // GET /api/jobs/:jobId/series — get series info for a job
+  const jobSeriesParams = matchRoute(req.method, url.pathname, '/api/jobs/:jobId/series');
+  if (jobSeriesParams && req.method === 'GET') {
+    const series = services.recurringJobs.getSeriesForJob(jobSeriesParams.jobId);
+    sendJson(res, 200, { item: series });
+    return true;
+  }
+
+  // POST /api/jobs/:jobId/occurrence-edit — edit occurrence with scope
+  const occEditParams = matchRoute(req.method, url.pathname, '/api/jobs/:jobId/occurrence-edit');
+  if (occEditParams && req.method === 'POST') {
+    const body = await readJsonBody(req);
+    const scope = validateEditScope(body);
+    const changes = validateOccurrenceEditInput(body.changes || {});
+    const newRecurrenceRule = body.recurrenceRule
+      ? validateRecurrenceInput(body.recurrenceRule)
+      : null;
+
+    if (scope === 'this') {
+      if (newRecurrenceRule) {
+        sendJson(res, 400, {
+          error: {
+            code: 'RECURRENCE_SCOPE_REQUIRES_FUTURE',
+            message: 'Changing the recurrence rule requires "this_and_future" scope',
+          },
+        });
+        return true;
+      }
+      const result = services.recurringJobs.editSingleOccurrence(occEditParams.jobId, changes);
+      sendJson(res, 200, { item: result });
+    } else {
+      const result = services.recurringJobs.editThisAndFutureOccurrences(
+        occEditParams.jobId, changes, newRecurrenceRule,
+      );
+      sendJson(res, 200, { item: result });
+    }
+    return true;
+  }
+
+  // POST /api/jobs/:jobId/occurrence-delete — delete occurrence with scope
+  const occDeleteParams = matchRoute(req.method, url.pathname, '/api/jobs/:jobId/occurrence-delete');
+  if (occDeleteParams && req.method === 'POST') {
+    const body = await readJsonBody(req);
+    const scope = validateDeleteScope(body);
+
+    if (scope === 'this') {
+      const result = services.recurringJobs.deleteThisOccurrence(occDeleteParams.jobId);
+      sendJson(res, 200, { item: result });
+    } else {
+      const result = services.recurringJobs.deleteThisAndFutureOccurrences(occDeleteParams.jobId);
+      sendJson(res, 200, { item: result });
+    }
     return true;
   }
 

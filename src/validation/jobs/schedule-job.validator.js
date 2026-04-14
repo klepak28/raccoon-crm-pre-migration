@@ -25,5 +25,7 @@ export function validateScheduleJobInput(input) {
     throw httpError(400, 'INVALID_SCHEDULE_RANGE', 'scheduledEndAt must be after scheduledStartAt');
   }
 
-  return { scheduledStartAt, scheduledEndAt };
+  const assigneeTeamMemberId = asTrimmedString(input.assigneeTeamMemberId) || null;
+
+  return { scheduledStartAt, scheduledEndAt, assigneeTeamMemberId };
 }

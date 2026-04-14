@@ -1658,3 +1658,81 @@ button {
     align-items: start;
   }
 }
+
+/* Recurring jobs */
+.badge-info {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.chip-toggle {
+  display: inline-flex;
+  cursor: pointer;
+}
+
+.chip-toggle input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.chip-toggle span {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.15s, color 0.15s;
+  user-select: none;
+}
+
+.chip-toggle input:checked + span {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+.radio-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.inline-number,
+.inline-date {
+  width: 80px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.inline-date {
+  width: 140px;
+}
+
+.scope-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.recurring-icon {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+fieldset.stack-gap-sm {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+
+fieldset.stack-gap-sm legend {
+  font-weight: 600;
+  font-size: 13px;
+  padding: 0 4px;
+}

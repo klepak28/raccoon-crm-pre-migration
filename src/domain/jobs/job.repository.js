@@ -19,6 +19,11 @@ export function createJobRepository(store) {
         scheduledStartAt: null,
         scheduledEndAt: null,
         assigneeTeamMemberId: null,
+        recurringSeriesId: input.recurringSeriesId || null,
+        occurrenceIndex: input.occurrenceIndex ?? null,
+        generatedFromRuleVersion: input.generatedFromRuleVersion || null,
+        isExceptionInstance: false,
+        deletedFromSeriesAt: null,
         createdAt: timestamp,
         updatedAt: timestamp,
       };
@@ -30,13 +35,27 @@ export function createJobRepository(store) {
       return job ? clone(job) : null;
     },
     list() {
-      return clone(store.jobs);
+      return clone(store.jobs.filter((job) => !job.deletedFromSeriesAt));
     },
     listByCustomerId(customerId) {
-      return clone(store.jobs.filter((job) => job.customerId === customerId));
+      return clone(store.jobs.filter((job) => job.customerId === customerId && !job.deletedFromSeriesAt));
     },
     listScheduled() {
-      return clone(store.jobs.filter((job) => job.scheduleState === 'scheduled'));
+      return clone(store.jobs.filter((job) => job.scheduleState === 'scheduled' && !job.deletedFromSeriesAt));
+    },
+    listBySeriesId(seriesId) {
+      return clone(
+        store.jobs
+          .filter((job) => job.recurringSeriesId === seriesId && !job.deletedFromSeriesAt)
+          .sort((a, b) => (a.occurrenceIndex ?? 0) - (b.occurrenceIndex ?? 0)),
+      );
+    },
+    listBySeriesIdIncludingDeleted(seriesId) {
+      return clone(
+        store.jobs
+          .filter((job) => job.recurringSeriesId === seriesId)
+          .sort((a, b) => (a.occurrenceIndex ?? 0) - (b.occurrenceIndex ?? 0)),
+      );
     },
     update(jobId, mutate) {
       const job = store.jobs.find((item) => item.id === jobId);

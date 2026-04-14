@@ -97,5 +97,9 @@ function toScheduleJob(job, customerRepository, teamMemberRepository) {
     assignee,
     assignmentLabel: assignee?.displayName || 'Unassigned',
     assignmentColor: assignee?.color || '#d6a54c',
+    isRecurring: Boolean(job.recurringSeriesId),
+    recurringSeriesId: job.recurringSeriesId,
+    occurrenceIndex: job.occurrenceIndex,
+    isExceptionInstance: job.isExceptionInstance,
   };
 }
