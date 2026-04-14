@@ -221,7 +221,7 @@ function bindGlobalNewMenu() {
   for (const item of panel.querySelectorAll('[data-new-action]')) {
     item.addEventListener('click', (event) => {
       const action = event.currentTarget.dataset.newAction;
-      if (action === 'job') {
+      if (action === 'job' || action === 'recurring') {
         hidePanel();
         return;
       }
