@@ -94,47 +94,56 @@ function renderShell({ title, subtitle = '', nav = 'customers', breadcrumbs = []
 
   app.innerHTML = `
     <div class="shell">
-      <aside class="sidebar">
-        <div>
-          <div class="brand-kicker">CRM Prototype</div>
-          <div class="brand-title">V1 Operations</div>
-          <p class="brand-copy">Customers, one-time jobs, and a real scheduler for the current build slice.</p>
+      <header class="app-topbar page-frame">
+        <div class="app-topbar-left">
+          <div>
+            <div class="brand-kicker">CRM Prototype</div>
+            <div class="app-brand">V1 Operations</div>
+          </div>
+          <nav class="top-nav">
+            <button class="top-nav-link" type="button" data-shell-action="home">Home</button>
+            <button class="top-nav-link" type="button" data-shell-action="inbox">Inbox</button>
+            <a class="top-nav-link ${nav === 'scheduler' ? 'active' : ''}" href="/app/calendar_new">Schedule</a>
+            <a class="top-nav-link ${nav === 'customers' ? 'active' : ''}" href="/app/customers/list">Customers</a>
+          </nav>
         </div>
-        <nav class="nav-stack">
-          <a class="nav-link ${nav === 'customers' ? 'active' : ''}" href="/app/customers/list">Customers</a>
-          <a class="nav-link ${nav === 'scheduler' ? 'active' : ''}" href="/app/calendar_new">Scheduler</a>
-        </nav>
-        <div class="sidebar-note">Unsupported in V1: recurrence, invoicing, billing, and bulk actions.</div>
-      </aside>
+        <div class="app-topbar-right">
+          <button class="search-pill" type="button" data-shell-action="search">Search</button>
+          <div class="new-menu-shell">
+            <button class="button button-primary" id="global-new-toggle" type="button">New</button>
+            <div class="new-menu-panel" id="global-new-menu" hidden>
+              <a class="new-menu-item" href="${escapeHtml(globalNewJobHref)}" data-new-action="job">
+                <strong>Job</strong>
+                <span>Create a one-time job</span>
+              </a>
+              <button class="new-menu-item" type="button" data-new-action="recurring">
+                <strong>Recurring job</strong>
+                <span>Unsupported in V1</span>
+              </button>
+              <button class="new-menu-item" type="button" data-new-action="estimate">
+                <strong>Estimate</strong>
+                <span>Unsupported in V1</span>
+              </button>
+              <button class="new-menu-item" type="button" data-new-action="event">
+                <strong>Event</strong>
+                <span>Unsupported in V1</span>
+              </button>
+            </div>
+          </div>
+          <button class="icon-button" type="button" data-shell-action="notifications" aria-label="Notifications">🔔</button>
+          <button class="icon-button" type="button" data-shell-action="settings" aria-label="Settings">⚙</button>
+          <div class="avatar-pill">AI</div>
+        </div>
+      </header>
       <main class="main-column">
-        <header class="page-frame top-frame">
+        <header class="page-frame top-frame hero-frame">
           <div class="page-frame-main">
             <div class="breadcrumbs">${breadcrumbs.length ? breadcrumbs.join('<span> / </span>') : ''}</div>
+            <div class="page-eyebrow">${nav === 'scheduler' ? 'Scheduler' : 'Customers'}</div>
             <h1>${escapeHtml(title)}</h1>
             ${subtitle ? `<p class="page-subtitle">${escapeHtml(subtitle)}</p>` : ''}
           </div>
           <div class="page-actions shell-actions">
-            <div class="new-menu-shell">
-              <button class="button button-primary" id="global-new-toggle" type="button">New</button>
-              <div class="new-menu-panel" id="global-new-menu" hidden>
-                <a class="new-menu-item" href="${escapeHtml(globalNewJobHref)}" data-new-action="job">
-                  <strong>Job</strong>
-                  <span>Create a one-time job</span>
-                </a>
-                <button class="new-menu-item" type="button" data-new-action="recurring">
-                  <strong>Recurring job</strong>
-                  <span>Unsupported in V1</span>
-                </button>
-                <button class="new-menu-item" type="button" data-new-action="estimate">
-                  <strong>Estimate</strong>
-                  <span>Unsupported in V1</span>
-                </button>
-                <button class="new-menu-item" type="button" data-new-action="event">
-                  <strong>Event</strong>
-                  <span>Unsupported in V1</span>
-                </button>
-              </div>
-            </div>
             ${actions}
           </div>
         </header>
@@ -145,7 +154,17 @@ function renderShell({ title, subtitle = '', nav = 'customers', breadcrumbs = []
     </div>
   `;
 
+  bindShellChrome();
   bindGlobalNewMenu();
+}
+
+function bindShellChrome() {
+  for (const button of document.querySelectorAll('[data-shell-action]')) {
+    button.addEventListener('click', () => {
+      const action = button.dataset.shellAction;
+      showTransientPageNotice(`${capitalize(action)} is visible in the target shell, but remains outside the supported V1 scope.`, 'warning');
+    });
+  }
 }
 
 function buildGlobalNewJobHref() {
@@ -551,12 +570,15 @@ async function renderNewJobPage() {
       'New job',
     ],
     actions: `
+      <button class="button button-ghost" type="button" id="new-job-template-button">Job Template</button>
+      <button class="icon-button" type="button" id="new-job-help-button" aria-label="Help">?</button>
       <a class="button button-ghost" href="${escapeHtml(returnTo || `/app/customers/${customer.id}`)}">${escapeHtml(returnTo ? 'Back to scheduler' : 'Back to customer')}</a>
+      <button class="button button-primary" form="new-job-page-form" type="submit" ${hasAddresses ? '' : 'disabled'}>Save job</button>
     `,
     content: `
-      <form id="new-job-page-form" class="job-workspace-grid">
+      <form id="new-job-page-form" class="job-workspace-grid job-workspace-grid-strong">
         <div class="stack-gap-lg">
-          <section class="surface-card stack-gap">
+          <section class="surface-card stack-gap workspace-pane workspace-pane-narrow">
             <div class="section-header">
               <h2 class="section-title">Customer</h2>
               <button type="button" class="button button-small button-ghost" id="new-job-customer-button">+ New customer</button>
@@ -581,7 +603,7 @@ async function renderNewJobPage() {
             </div>
           </section>
 
-          <section class="surface-card stack-gap">
+          <section class="surface-card stack-gap workspace-pane workspace-pane-narrow">
             <div class="section-header">
               <h2 class="section-title">Schedule</h2>
               <div class="chip-row-inline">
@@ -611,10 +633,25 @@ async function renderNewJobPage() {
             </label>
             ${customer.doNotService ? statusMessage('This customer is marked do not service. You can create the job, but the schedule save step will be skipped.', 'warning') : '<div class="table-meta">Leave the team blank to keep the job in the Unassigned lane after scheduling.</div>'}
           </section>
+
+          <section class="surface-card stack-gap workspace-pane workspace-pane-narrow">
+            <button class="workspace-row-button" type="button" data-shell-action="checklists">
+              <strong>Checklists</strong>
+              <span>Visible in target UI, unsupported in V1</span>
+            </button>
+            <button class="workspace-row-button" type="button" data-shell-action="attachments">
+              <strong>Attachments</strong>
+              <span>Visible in target UI, unsupported in V1</span>
+            </button>
+            <button class="workspace-row-button" type="button" data-shell-action="fields">
+              <strong>Fields</strong>
+              <span>Visible in target UI, unsupported in V1</span>
+            </button>
+          </section>
         </div>
 
         <div class="stack-gap-lg">
-          <section class="surface-card stack-gap">
+          <section class="surface-card stack-gap workspace-pane workspace-pane-wide">
             <div class="section-header">
               <h2 class="section-title">Private notes</h2>
               <div class="segmented-pill">
@@ -628,7 +665,7 @@ async function renderNewJobPage() {
             </label>
           </section>
 
-          <section class="surface-card stack-gap">
+          <section class="surface-card stack-gap workspace-pane workspace-pane-wide">
             <div class="section-header">
               <h2 class="section-title">Line items</h2>
               <div class="chip-row-inline">
@@ -657,6 +694,40 @@ async function renderNewJobPage() {
               <span>Tags</span>
               <input name="tags" placeholder="comma separated" value="${escapeHtml((customer.tags || []).join(', '))}" />
             </label>
+            <div class="line-items-grid">
+              <section class="line-item-group">
+                <div class="section-header">
+                  <h3>Services</h3>
+                  <div class="inline-actions">
+                    <button class="button button-small button-ghost" type="button" data-shell-action="add service">Add service</button>
+                    <button class="button button-small button-ghost" type="button" data-shell-action="service price book">Service Price Book</button>
+                  </div>
+                </div>
+                <div class="line-item-row">
+                  <div>
+                    <strong>Home Cleaning</strong>
+                    <div class="table-meta">Total price</div>
+                  </div>
+                  <strong>$0.00</strong>
+                </div>
+              </section>
+              <section class="line-item-group">
+                <div class="section-header">
+                  <h3>Materials</h3>
+                  <div class="inline-actions">
+                    <button class="button button-small button-ghost" type="button" data-shell-action="add material">Add material</button>
+                    <button class="button button-small button-ghost" type="button" data-shell-action="material price book">Material Price Book</button>
+                  </div>
+                </div>
+                <div class="line-item-row line-item-row-muted">
+                  <div>
+                    <strong>No materials yet</strong>
+                    <div class="table-meta">Pricing remains illustrative in V1.</div>
+                  </div>
+                  <strong>$0.00</strong>
+                </div>
+              </section>
+            </div>
             <div class="stat-summary-card">
               <div class="stat-row"><span>Subtotal</span><strong>$0.00</strong></div>
               <div class="stat-row"><span>Tax rate</span><strong>$0.00</strong></div>
@@ -665,14 +736,14 @@ async function renderNewJobPage() {
             <div class="table-meta">This pass keeps line items as a service-summary-first V1 workflow. Invoicing and billing remain out of scope.</div>
           </section>
 
-          <section class="surface-card stack-gap">
+          <section class="surface-card stack-gap workspace-pane workspace-pane-wide">
             <div id="new-job-page-status"></div>
             <div class="modal-actions split-actions">
               <div class="inline-actions">
                 <a class="button button-ghost" href="${escapeHtml(returnTo || `/app/customers/${customer.id}`)}">Cancel</a>
               </div>
               <div class="inline-actions">
-                <button type="submit" class="button button-primary" ${hasAddresses ? '' : 'disabled'}>Save job</button>
+                <button type="button" class="button button-ghost" data-shell-action="job template">Job Template</button>
               </div>
             </div>
           </section>
@@ -692,7 +763,13 @@ async function renderNewJobPage() {
           date: seededDate,
         });
       },
+      });
     });
+  document.getElementById('new-job-template-button')?.addEventListener('click', () => {
+    showTransientPageNotice('Job templates are visible in the target UI, but remain unsupported in V1.', 'warning');
+  });
+  document.getElementById('new-job-help-button')?.addEventListener('click', () => {
+    showTransientPageNotice('In-product help is visible in the target UI, but remains outside the supported V1 scope.', 'warning');
   });
   document.getElementById('new-job-page-form').addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -746,12 +823,14 @@ async function renderJobSchedulePage(jobId) {
       'Schedule',
     ],
     actions: `
+      <button class="button button-ghost" type="button" disabled>Notify customer</button>
       <a class="button button-ghost" href="${escapeHtml(buildJobUrl(job.id, location.pathname, location.search))}">Back to job</a>
       <a class="button button-ghost" href="${escapeHtml(returnTo || '/app/calendar_new')}">${escapeHtml(returnTo ? 'Back to scheduler' : 'Open scheduler')}</a>
+      <button class="button button-primary" form="schedule-route-form" type="submit">Save</button>
     `,
     content: `
-      <div class="job-workspace-grid">
-        <form id="schedule-route-form" class="surface-card stack-gap">
+      <div class="job-workspace-grid job-workspace-grid-strong">
+        <form id="schedule-route-form" class="surface-card stack-gap workspace-pane workspace-pane-narrow">
           <div class="section-header">
             <h2 class="section-title">Schedule a time for job</h2>
             <div class="chip-row-inline">
@@ -779,6 +858,16 @@ async function renderJobSchedulePage(jobId) {
               ${state.teamMembers.map((member) => `<option value="${member.id}" ${job.assigneeTeamMemberId === member.id ? 'selected' : ''}>${escapeHtml(member.displayName)}</option>`).join('')}
             </select>
           </label>
+          <label>
+            <span>Arrival window</span>
+            <select disabled>
+              <option>Use scheduled arrival for selected team</option>
+            </select>
+          </label>
+          <div class="stack-gap schedule-disabled-block">
+            <div class="label">Repeats</div>
+            <button class="button button-ghost scheduler-unsupported-pill" type="button" data-shell-action="repeats">Recurring scheduling is visible in the target flow, but unsupported in V1</button>
+          </div>
           <div class="profile-grid">
             <div>
               <div class="label">Customer</div>
@@ -810,7 +899,7 @@ async function renderJobSchedulePage(jobId) {
           </div>
         </form>
 
-        <section class="surface-card stack-gap scheduler-embedded-panel">
+        <section class="surface-card stack-gap scheduler-embedded-panel workspace-pane workspace-pane-wide">
           <div class="section-header">
             <h2 class="section-title">Day board</h2>
             <div class="inline-actions">
@@ -1021,20 +1110,42 @@ async function renderSchedulerPage() {
     nav: 'scheduler',
     breadcrumbs: [escapeHtml('Scheduler')],
     actions: `
-      <div class="scheduler-actions">
-        <a class="button button-primary" href="${buildNewJobUrl({ pathname: location.pathname, search: location.search, date })}">New job</a>
-        <div class="view-switcher">
-          ${schedulerViewButton('day', view, date, filter, selectedLaneIds)}
-          ${schedulerViewButton('week', view, date, filter, selectedLaneIds)}
-          ${schedulerViewButton('month', view, date, filter, selectedLaneIds)}
-        </div>
+      <div class="view-switcher view-switcher-strong">
+        ${schedulerViewButton('day', view, date, filter, selectedLaneIds)}
+        ${schedulerViewButton('week', view, date, filter, selectedLaneIds)}
+        ${schedulerViewButton('month', view, date, filter, selectedLaneIds)}
       </div>
     `,
     content: `
       <section class="surface-card stack-gap-lg scheduler-surface">
-        <div class="scheduler-context-bar">
-          <div class="context-primary">
-            <div class="range-pill range-pill-strong">${escapeHtml(rangeLabel)}</div>
+        <div class="scheduler-toolbar-shell">
+          <div class="inline-actions">
+            <button class="button" type="button" data-shell-action="bulk actions">Bulk actions</button>
+            <a class="button" href="${buildSchedulerUrl({ view, date: localToday(), filter, lanes: selectedLaneIds })}">Today</a>
+            <a class="button button-ghost" href="${buildSchedulerUrl({ view, date: stepAnchorDay(view, date, -1), filter, lanes: selectedLaneIds })}">Previous</a>
+            <a class="button button-ghost" href="${buildSchedulerUrl({ view, date: stepAnchorDay(view, date, 1), filter, lanes: selectedLaneIds })}">Next</a>
+          </div>
+          <div class="inline-actions scheduler-toolbar-center">
+            <div class="scheduler-date-pill">${escapeHtml(formatRangeLabel('day', date))}</div>
+            <button class="icon-button" type="button" data-shell-action="calendar view" aria-label="Calendar view">📅</button>
+            <button class="icon-button" type="button" data-shell-action="map view" aria-label="Map view">📍</button>
+          </div>
+          <div class="inline-actions scheduler-toolbar-right">
+            <button class="button button-ghost" type="button" data-shell-action="color by employee">Color by: Employee</button>
+            <form id="scheduler-jump-form" class="inline-actions compact-form scheduler-date-jump">
+              <label>
+                <span class="label-inline">Focus date</span>
+                <input type="date" name="date" value="${escapeHtml(date)}" />
+              </label>
+              <input type="hidden" name="view" value="${escapeHtml(view)}" />
+              <input type="hidden" name="filter" value="${escapeHtml(filter)}" />
+              <button class="button button-primary" type="submit">Go</button>
+            </form>
+          </div>
+        </div>
+        <div class="scheduler-context-bar scheduler-context-bar-strong">
+          <div class="context-primary context-primary-strong">
+            <div class="range-pill range-pill-strong">${escapeHtml(shortDayLabel(date))}</div>
             <div class="context-meta">Focused ${escapeHtml(shortDayLabel(date))} in ${escapeHtml(capitalize(view))} view</div>
           </div>
           <div class="context-stats">
@@ -1042,22 +1153,6 @@ async function renderSchedulerPage() {
             <div class="context-stat"><span>Unassigned</span><strong>${summary.unassignedJobs}</strong></div>
             <div class="context-stat"><span>Active days</span><strong>${summary.daysWithJobs}</strong></div>
           </div>
-        </div>
-        <div class="toolbar toolbar-between scheduler-toolbar">
-          <div class="inline-actions">
-            <a class="button" href="${buildSchedulerUrl({ view, date: stepAnchorDay(view, date, -1), filter, lanes: selectedLaneIds })}">Previous</a>
-            <a class="button" href="${buildSchedulerUrl({ view, date: localToday(), filter, lanes: selectedLaneIds })}">Today</a>
-            <a class="button" href="${buildSchedulerUrl({ view, date: stepAnchorDay(view, date, 1), filter, lanes: selectedLaneIds })}">Next</a>
-          </div>
-          <form id="scheduler-jump-form" class="inline-actions compact-form">
-            <label>
-              <span class="label-inline">Focus date</span>
-              <input type="date" name="date" value="${escapeHtml(date)}" />
-            </label>
-            <input type="hidden" name="view" value="${escapeHtml(view)}" />
-            <input type="hidden" name="filter" value="${escapeHtml(filter)}" />
-            <button class="button button-primary" type="submit">Go</button>
-          </form>
         </div>
         <div class="scheduler-layout">
           <aside class="scheduler-rail">
@@ -1085,6 +1180,10 @@ async function renderSchedulerPage() {
                   ${filter ? `<a class="button button-ghost" href="${buildSchedulerUrl({ view, date, lanes: selectedLaneIds })}">Clear</a>` : ''}
                 </div>
               </form>
+            </div>
+            <div class="rail-card stack-gap">
+              <h2 class="section-title">Areas</h2>
+              <button class="button button-ghost scheduler-unsupported-pill" type="button" data-shell-action="areas">Area filtering is not supported in V1</button>
             </div>
             <div class="rail-card stack-gap">
               <h2 class="section-title">Employees</h2>
@@ -1167,7 +1266,14 @@ function renderDaySchedulerView(date, schedule, filter, lanes = []) {
   }
 
   return `
-    <div class="lane-board">
+    <div class="day-board-shell">
+      <div class="day-time-scale">
+        <div class="timezone-pill">GMT-05</div>
+        <div class="time-scale-row">
+          ${['7am', '8am', '9am', '10am', '11am', '12pm', '1pm', '2pm', '3pm', '4pm', '5pm'].map((label) => `<span>${label}</span>`).join('')}
+        </div>
+      </div>
+      <div class="lane-board">
       ${schedule.lanes.map((lane) => {
         const laneJobs = (jobsByLane.get(lane.id) || []).sort(compareJobs);
         return `
@@ -1189,6 +1295,7 @@ function renderDaySchedulerView(date, schedule, filter, lanes = []) {
           </section>
         `;
       }).join('')}
+      </div>
     </div>
   `;
 }
