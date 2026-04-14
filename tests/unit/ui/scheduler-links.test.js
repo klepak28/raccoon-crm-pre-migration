@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  buildJobScheduleUrl,
+  buildNewJobUrl,
   buildCustomerUrl,
   buildDayUrl,
   buildJobUrl,
@@ -48,5 +50,24 @@ test('buildJobUrl carries scheduler return context into job detail links', () =>
   assert.equal(
     buildJobUrl('job_123', '/app/calendar_new', '?view=week&date=2026-04-13&filter=vip'),
     '/app/jobs/job_123?returnTo=%2Fapp%2Fcalendar_new%3Fview%3Dweek%26date%3D2026-04-13%26filter%3Dvip',
+  );
+});
+
+test('buildNewJobUrl carries customer, date, and scheduler return context', () => {
+  assert.equal(
+    buildNewJobUrl({
+      customerId: 'cust_123',
+      pathname: '/app/calendar_new',
+      search: '?view=day&date=2026-04-15&filter=vip',
+      date: '2026-04-15',
+    }),
+    '/app/jobs/new?customerId=cust_123&date=2026-04-15&returnTo=%2Fapp%2Fcalendar_new%3Fview%3Dday%26date%3D2026-04-15%26filter%3Dvip',
+  );
+});
+
+test('buildJobScheduleUrl carries scheduler return context into schedule route', () => {
+  assert.equal(
+    buildJobScheduleUrl('job_123', '/app/calendar_new', '?view=month&date=2026-04-01'),
+    '/app/jobs/job_123/schedule?returnTo=%2Fapp%2Fcalendar_new%3Fview%3Dmonth%26date%3D2026-04-01',
   );
 });

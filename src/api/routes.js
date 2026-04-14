@@ -33,7 +33,9 @@ export async function handleRoute({ req, res, url, context }) {
   if (req.method === 'GET' && (
     url.pathname === '/app/customers/list' ||
     url.pathname === '/app/calendar_new' ||
+    url.pathname === '/app/jobs/new' ||
     matchRoute(req.method, url.pathname, '/app/jobs/:jobId') ||
+    matchRoute(req.method, url.pathname, '/app/jobs/:jobId/schedule') ||
     matchRoute(req.method, url.pathname, '/app/customers/:customerId')
   )) {
     sendHtml(res, 200, renderAppShell('CRM V1'));

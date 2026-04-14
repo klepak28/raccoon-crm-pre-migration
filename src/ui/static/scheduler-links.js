@@ -4,6 +4,29 @@ export function buildSchedulerUrl({ view, date, filter = '' }) {
   return `/app/calendar_new?${params.toString()}`;
 }
 
+export function buildNewJobUrl({ customerId, pathname = '', search = '', date = '' }) {
+  const params = new URLSearchParams();
+  if (customerId) params.set('customerId', customerId);
+  if (date) params.set('date', date);
+
+  const schedulerQuery = getActiveSchedulerReturnTo(pathname, search) || getSchedulerContext(search);
+  if (schedulerQuery) params.set('returnTo', schedulerQuery);
+
+  const query = params.toString();
+  return `/app/jobs/new${query ? `?${query}` : ''}`;
+}
+
+export function buildJobScheduleUrl(jobId, pathname = '', search = '', date = '') {
+  const params = new URLSearchParams();
+  if (date) params.set('date', date);
+
+  const schedulerQuery = getActiveSchedulerReturnTo(pathname, search) || getSchedulerContext(search);
+  if (schedulerQuery) params.set('returnTo', schedulerQuery);
+
+  const query = params.toString();
+  return `/app/jobs/${jobId}/schedule${query ? `?${query}` : ''}`;
+}
+
 export function buildDayUrl(day, filter = '') {
   return buildSchedulerUrl({ view: 'day', date: day, filter });
 }

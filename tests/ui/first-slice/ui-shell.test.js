@@ -41,3 +41,25 @@ test('dedicated customer detail shell is served on the expected route', async ()
     assert.match(html, /\/static\/app.js/);
   });
 });
+
+test('dedicated new job shell is served on the expected route', async () => {
+  const app = createApp({ staticRoot, context: createContext() });
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/app/jobs/new?customerId=cust_0001`);
+    const html = await response.text();
+    assert.equal(response.status, 200);
+    assert.match(html, /CRM V1/);
+    assert.match(html, /\/static\/app.js/);
+  });
+});
+
+test('dedicated job schedule shell is served on the expected route', async () => {
+  const app = createApp({ staticRoot, context: createContext() });
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/app/jobs/job_0001/schedule`);
+    const html = await response.text();
+    assert.equal(response.status, 200);
+    assert.match(html, /CRM V1/);
+    assert.match(html, /\/static\/app.js/);
+  });
+});

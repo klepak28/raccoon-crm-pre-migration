@@ -22,7 +22,15 @@ import {
   formatRangeLabel,
 } from './date-utils.js';
 import { badge, chips, consumeFlash, emptyState, escapeHtml, formatAddress, setFlash, statusMessage } from './ui.js';
-import { buildCustomerUrl, buildDayUrl, buildJobUrl, buildSchedulerUrl, getSchedulerContext } from './scheduler-links.js';
+import {
+  buildCustomerUrl,
+  buildDayUrl,
+  buildJobScheduleUrl,
+  buildJobUrl,
+  buildNewJobUrl,
+  buildSchedulerUrl,
+  getSchedulerContext,
+} from './scheduler-links.js';
 
 const app = document.getElementById('app');
 const state = {
@@ -44,6 +52,11 @@ async function renderRoute() {
     return;
   }
 
+  if (pathname === '/app/jobs/new') {
+    await renderNewJobPage();
+    return;
+  }
+
   const customerMatch = pathname.match(/^\/app\/customers\/([^/]+)$/);
   if (customerMatch) {
     await renderCustomerDetailPage(customerMatch[1]);
@@ -53,6 +66,12 @@ async function renderRoute() {
   const jobMatch = pathname.match(/^\/app\/jobs\/([^/]+)$/);
   if (jobMatch) {
     await renderJobDetailPage(jobMatch[1]);
+    return;
+  }
+
+  const jobScheduleMatch = pathname.match(/^\/app\/jobs\/([^/]+)\/schedule$/);
+  if (jobScheduleMatch) {
+    await renderJobSchedulePage(jobScheduleMatch[1]);
     return;
   }
 
@@ -221,7 +240,7 @@ async function renderCustomerDetailPage(customerId) {
     ],
     actions: `
       <button class="button" id="edit-customer-button">Edit</button>
-      <button class="button button-primary" id="new-job-button">New job</button>
+      <a class="button button-primary" id="new-job-button" href="${buildNewJobUrl({ customerId: customer.id, pathname: location.pathname, search: location.search })}">New job</a>
       <a class="button button-ghost" href="${escapeHtml(schedulerContext || '/app/calendar_new')}">Scheduler</a>
     `,
     content: `
@@ -280,7 +299,7 @@ async function renderCustomerDetailPage(customerId) {
           <div class="surface-card stack-gap">
             <div class="section-header">
               <h2 class="section-title">Related jobs</h2>
-              <button class="button button-primary" id="new-job-inline-button">Create one-time job</button>
+              <a class="button button-primary" id="new-job-inline-button" href="${buildNewJobUrl({ customerId: customer.id, pathname: location.pathname, search: location.search })}">Create one-time job</a>
             </div>
             <div id="customer-jobs-region"></div>
           </div>
@@ -303,8 +322,6 @@ async function renderCustomerDetailPage(customerId) {
 
   renderCustomerJobs(customer, customer.jobs);
   document.getElementById('edit-customer-button').addEventListener('click', () => openCustomerFormModal({ mode: 'edit', customer }));
-  document.getElementById('new-job-button').addEventListener('click', () => openCreateJobModal(customer));
-  document.getElementById('new-job-inline-button').addEventListener('click', () => openCreateJobModal(customer));
 }
 
 function renderCustomerJobs(customer, jobs) {
@@ -354,6 +371,355 @@ function renderCustomerJobs(customer, jobs) {
   }
 }
 
+async function renderNewJobPage() {
+  const params = new URLSearchParams(location.search);
+  const customerId = params.get('customerId');
+  const seededDate = params.get('date') || localToday();
+  const returnTo = getSchedulerContext(location.search);
+
+  if (!customerId) {
+    renderShell({
+      title: 'New job',
+      subtitle: 'Launch this workflow from a customer record so the customer context stays explicit.',
+      nav: returnTo ? 'scheduler' : 'customers',
+      breadcrumbs: ['<a href="/app/customers/list">Customers</a>', 'New job'],
+      actions: returnTo ? `<a class="button button-ghost" href="${escapeHtml(returnTo)}">Back to scheduler</a>` : '',
+      content: `<section class="surface-card">${emptyState('Customer required', 'Open a customer record first, then start a one-time job from there.', `<a class="button button-primary" href="/app/customers/list${returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : ''}">Go to customers</a>`)}</section>`,
+    });
+    return;
+  }
+
+  const customer = await api.getCustomer(customerId);
+  const defaultStart = `${seededDate}T09:00`;
+  const defaultEnd = `${seededDate}T10:00`;
+  const hasAddresses = Boolean(customer.addresses?.length);
+
+  renderShell({
+    title: 'New job',
+    subtitle: 'Dedicated one-time job workspace with customer context, optional scheduling, and V1-safe operational fields.',
+    nav: returnTo ? 'scheduler' : 'customers',
+    breadcrumbs: [
+      '<a href="/app/customers/list">Customers</a>',
+      `<a href="${buildCustomerUrl(customer.id, location.pathname, location.search)}">${escapeHtml(customer.displayName)}</a>`,
+      'New job',
+    ],
+    actions: `
+      <a class="button button-ghost" href="${escapeHtml(returnTo || `/app/customers/${customer.id}`)}">${escapeHtml(returnTo ? 'Back to scheduler' : 'Back to customer')}</a>
+    `,
+    content: `
+      <form id="new-job-page-form" class="job-workspace-grid">
+        <div class="stack-gap-lg">
+          <section class="surface-card stack-gap">
+            <div class="section-header">
+              <h2 class="section-title">Customer</h2>
+              <button type="button" class="button button-small button-ghost" id="new-job-customer-button">+ New customer</button>
+            </div>
+            <label>
+              <span>Name, email, phone, or address</span>
+              <input value="${escapeHtml(customer.displayName)}" disabled />
+            </label>
+            <div class="profile-grid">
+              <div>
+                <div class="label">Primary phone</div>
+                <div>${escapeHtml(customer.phones?.[0]?.value || 'None')}</div>
+              </div>
+              <div>
+                <div class="label">Primary email</div>
+                <div>${escapeHtml(customer.emails?.[0]?.value || 'None')}</div>
+              </div>
+            </div>
+            <div>
+              <div class="label">Address</div>
+              <div>${escapeHtml(formatAddress(customer.addresses?.[0]) || 'No address')}</div>
+            </div>
+          </section>
+
+          <section class="surface-card stack-gap">
+            <div class="section-header">
+              <h2 class="section-title">Schedule</h2>
+              <div class="chip-row-inline">
+                ${customer.doNotService ? badge('Do not service', 'danger') : badge('Scheduling allowed', 'success')}
+              </div>
+            </div>
+            <div class="form-grid two-columns">
+              <label>
+                <span>From</span>
+                <input name="scheduledStartAt" type="datetime-local" value="${escapeHtml(defaultStart)}" />
+              </label>
+              <label>
+                <span>To</span>
+                <input name="scheduledEndAt" type="datetime-local" value="${escapeHtml(defaultEnd)}" />
+              </label>
+            </div>
+            <div class="inline-actions check-row">
+              <label><input type="checkbox" name="skipSchedule" /> Create unscheduled</label>
+              <label><input type="checkbox" name="notifyCustomer" ${customer.sendNotifications ? 'checked' : ''} disabled /> Notify customer</label>
+            </div>
+            <label>
+              <span>Edit team</span>
+              <select name="teamMemberId">
+                <option value="">Unassigned</option>
+                ${state.teamMembers.map((member) => `<option value="${member.id}">${escapeHtml(member.displayName)}</option>`).join('')}
+              </select>
+            </label>
+            ${customer.doNotService ? statusMessage('This customer is marked do not service. You can create the job, but the schedule save step will be skipped.', 'warning') : '<div class="table-meta">Leave the team blank to keep the job in the Unassigned lane after scheduling.</div>'}
+          </section>
+        </div>
+
+        <div class="stack-gap-lg">
+          <section class="surface-card stack-gap">
+            <div class="section-header">
+              <h2 class="section-title">Private notes</h2>
+              <div class="segmented-pill">
+                <span class="is-active">This job</span>
+                <span>Customer</span>
+              </div>
+            </div>
+            <label>
+              <span>Private notes</span>
+              <textarea name="privateNotes" placeholder="Add a private note here"></textarea>
+            </label>
+          </section>
+
+          <section class="surface-card stack-gap">
+            <div class="section-header">
+              <h2 class="section-title">Line items</h2>
+              <div class="chip-row-inline">
+                ${badge('One-time job', 'neutral')}
+                ${badge('V1-safe fields only', 'warning')}
+              </div>
+            </div>
+            <label>
+              <span>Service summary</span>
+              <input name="titleOrServiceSummary" required placeholder="Home Cleaning" />
+            </label>
+            <div class="form-grid two-columns">
+              <label>
+                <span>Address</span>
+                <select name="customerAddressId" required ${hasAddresses ? '' : 'disabled'}>
+                  ${customer.addresses.map((address) => `<option value="${address.id}">${escapeHtml(formatAddress(address))}</option>`).join('')}
+                </select>
+              </label>
+              <label>
+                <span>Lead source</span>
+                <input name="leadSource" value="${escapeHtml(customer.leadSource || '')}" />
+              </label>
+            </div>
+            ${hasAddresses ? '' : statusMessage('This customer does not have an address yet. Add an address on the customer record before creating a job.', 'warning')}
+            <label>
+              <span>Tags</span>
+              <input name="tags" placeholder="comma separated" value="${escapeHtml((customer.tags || []).join(', '))}" />
+            </label>
+            <div class="stat-summary-card">
+              <div class="stat-row"><span>Subtotal</span><strong>$0.00</strong></div>
+              <div class="stat-row"><span>Tax rate</span><strong>$0.00</strong></div>
+              <div class="stat-row"><span>Total</span><strong>$0.00</strong></div>
+            </div>
+            <div class="table-meta">This pass keeps line items as a service-summary-first V1 workflow. Invoicing and billing remain out of scope.</div>
+          </section>
+
+          <section class="surface-card stack-gap">
+            <div id="new-job-page-status"></div>
+            <div class="modal-actions split-actions">
+              <div class="inline-actions">
+                <a class="button button-ghost" href="${escapeHtml(returnTo || `/app/customers/${customer.id}`)}">Cancel</a>
+              </div>
+              <div class="inline-actions">
+                <button type="submit" class="button button-primary" ${hasAddresses ? '' : 'disabled'}>Save job</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </form>
+    `,
+  });
+
+  document.getElementById('new-job-customer-button').addEventListener('click', () => {
+    openCreateCustomerModal({
+      onSave(savedCustomer) {
+        setFlash('Customer created. Continue building the job.', 'success');
+        location.href = buildNewJobUrl({
+          customerId: savedCustomer.id,
+          pathname: location.pathname,
+          search: location.search,
+          date: seededDate,
+        });
+      },
+    });
+  });
+  document.getElementById('new-job-page-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const statusRegion = document.getElementById('new-job-page-status');
+    try {
+      const payload = jobPayloadFromForm(form);
+      const created = await api.createJob(customer.id, payload);
+
+      const skipSchedule = form.querySelector('[name="skipSchedule"]').checked;
+      const start = form.querySelector('[name="scheduledStartAt"]').value;
+      const end = form.querySelector('[name="scheduledEndAt"]').value;
+      const teamMemberId = form.querySelector('[name="teamMemberId"]').value;
+
+      if (!skipSchedule && start && end && !customer.doNotService) {
+        await api.scheduleJob(created.id, {
+          scheduledStartAt: toIso(start),
+          scheduledEndAt: toIso(end),
+        });
+      }
+
+      if (teamMemberId) {
+        await api.assignJob(created.id, teamMemberId);
+      }
+
+      setFlash('Job created.', 'success');
+      location.href = buildJobUrl(created.id, location.pathname, location.search);
+    } catch (error) {
+      statusRegion.innerHTML = statusMessage(error.message, 'danger');
+    }
+  });
+}
+
+async function renderJobSchedulePage(jobId) {
+  const params = new URLSearchParams(location.search);
+  const job = await api.getJob(jobId);
+  const focusDate = params.get('date') || formatDayKey(new Date(job.scheduledStartAt || new Date()));
+  const [schedule] = await Promise.all([
+    api.getScheduleRange(focusDate, focusDate),
+  ]);
+  const returnTo = getSchedulerContext(location.search);
+
+  renderShell({
+    title: `Schedule ${job.jobNumber}`,
+    subtitle: `${job.titleOrServiceSummary} • ${job.customer.displayName}`,
+    nav: returnTo ? 'scheduler' : 'customers',
+    breadcrumbs: [
+      '<a href="/app/customers/list">Customers</a>',
+      `<a href="${buildCustomerUrl(job.customer.id, location.pathname, location.search)}">${escapeHtml(job.customer.displayName)}</a>`,
+      `<a href="${buildJobUrl(job.id, location.pathname, location.search)}">${escapeHtml(job.jobNumber)}</a>`,
+      'Schedule',
+    ],
+    actions: `
+      <a class="button button-ghost" href="${escapeHtml(buildJobUrl(job.id, location.pathname, location.search))}">Back to job</a>
+      <a class="button button-ghost" href="${escapeHtml(returnTo || '/app/calendar_new')}">${escapeHtml(returnTo ? 'Back to scheduler' : 'Open scheduler')}</a>
+    `,
+    content: `
+      <div class="job-workspace-grid">
+        <form id="schedule-route-form" class="surface-card stack-gap">
+          <div class="section-header">
+            <h2 class="section-title">Schedule a time for job</h2>
+            <div class="chip-row-inline">
+              ${job.scheduleState === 'scheduled' ? badge('Scheduled', 'success') : badge('Unscheduled', 'warning')}
+              ${job.assignee?.displayName ? badge(job.assignee.displayName, 'neutral') : badge('Unassigned', 'warning')}
+            </div>
+          </div>
+          <div class="form-grid two-columns">
+            <label>
+              <span>From</span>
+              <input name="scheduledStartAt" type="datetime-local" value="${job.scheduledStartAt ? escapeHtml(toDateTimeLocal(job.scheduledStartAt)) : `${escapeHtml(focusDate)}T09:00`}" required />
+            </label>
+            <label>
+              <span>To</span>
+              <input name="scheduledEndAt" type="datetime-local" value="${job.scheduledEndAt ? escapeHtml(toDateTimeLocal(job.scheduledEndAt)) : `${escapeHtml(focusDate)}T10:00`}" required />
+            </label>
+          </div>
+          <div class="inline-actions check-row">
+            <label><input type="checkbox" name="notifyCustomer" ${job.customer.sendNotifications ? 'checked' : ''} disabled /> Notify customer</label>
+          </div>
+          <label>
+            <span>Edit team</span>
+            <select name="teamMemberId">
+              <option value="">Unassigned</option>
+              ${state.teamMembers.map((member) => `<option value="${member.id}" ${job.assigneeTeamMemberId === member.id ? 'selected' : ''}>${escapeHtml(member.displayName)}</option>`).join('')}
+            </select>
+          </label>
+          <div class="profile-grid">
+            <div>
+              <div class="label">Customer</div>
+              <div>${escapeHtml(job.customer.displayName)}</div>
+            </div>
+            <div>
+              <div class="label">Primary phone</div>
+              <div>${escapeHtml(job.customer.primaryPhone || 'None')}</div>
+            </div>
+            <div>
+              <div class="label">Address</div>
+              <div>${escapeHtml(formatAddress(job.address) || 'No address')}</div>
+            </div>
+            <div>
+              <div class="label">Service summary</div>
+              <div>${escapeHtml(job.titleOrServiceSummary)}</div>
+            </div>
+          </div>
+          ${job.customer.doNotService ? statusMessage('This customer is marked do not service. Scheduling save is blocked, but assignment changes remain allowed.', 'warning') : '<div class="table-meta">Scheduling and assignment remain separate in V1. Saving here can update one or both.</div>'}
+          <div id="schedule-route-status"></div>
+          <div class="modal-actions split-actions">
+            <div class="inline-actions">
+              ${job.scheduleState === 'scheduled' ? '<button type="button" class="button button-danger" id="schedule-route-unschedule">Unschedule</button>' : ''}
+            </div>
+            <div class="inline-actions">
+              <a class="button button-ghost" href="${escapeHtml(buildJobUrl(job.id, location.pathname, location.search))}">Cancel</a>
+              <button type="submit" class="button button-primary">Save</button>
+            </div>
+          </div>
+        </form>
+
+        <section class="surface-card stack-gap scheduler-embedded-panel">
+          <div class="section-header">
+            <h2 class="section-title">Day board</h2>
+            <div class="inline-actions">
+              <a class="button button-small button-ghost" href="${buildDayUrl(focusDate)}">Open full day</a>
+            </div>
+          </div>
+          <div class="table-meta">Place this visit with the live day context visible. The focused day is ${escapeHtml(shortDayLabel(focusDate))}.</div>
+          ${renderDaySchedulerView(focusDate, schedule, '')}
+        </section>
+      </div>
+    `,
+  });
+
+  bindSchedulerQuickActions();
+
+  document.getElementById('schedule-route-unschedule')?.addEventListener('click', async () => {
+    if (!confirm('Undo the current schedule for this job?')) return;
+    try {
+      await api.unscheduleJob(job.id);
+      setFlash('Job unscheduled.', 'success');
+      location.href = buildJobUrl(job.id, location.pathname, location.search);
+    } catch (error) {
+      document.getElementById('schedule-route-status').innerHTML = statusMessage(error.message, 'danger');
+    }
+  });
+
+  document.getElementById('schedule-route-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const statusRegion = document.getElementById('schedule-route-status');
+    try {
+      const start = form.querySelector('[name="scheduledStartAt"]').value;
+      const end = form.querySelector('[name="scheduledEndAt"]').value;
+      const teamMemberId = form.querySelector('[name="teamMemberId"]').value;
+
+      if (!job.customer.doNotService) {
+        await api.scheduleJob(job.id, {
+          scheduledStartAt: toIso(start),
+          scheduledEndAt: toIso(end),
+        });
+      }
+
+      if (teamMemberId) {
+        await api.assignJob(job.id, teamMemberId);
+      } else if (job.assigneeTeamMemberId) {
+        await api.unassignJob(job.id);
+      }
+
+      setFlash('Schedule updated.', 'success');
+      location.href = buildJobUrl(job.id, location.pathname, location.search);
+    } catch (error) {
+      statusRegion.innerHTML = statusMessage(error.message, 'danger');
+    }
+  });
+}
+
 async function renderJobDetailPage(jobId) {
   const job = await api.getJob(jobId);
   const customer = await api.getCustomer(job.customer.id);
@@ -371,7 +737,7 @@ async function renderJobDetailPage(jobId) {
     ],
     actions: `
       <button class="button" id="edit-job-button">Edit job</button>
-      <button class="button button-primary" id="schedule-job-button">${job.scheduleState === 'scheduled' ? 'Reschedule' : 'Schedule'}</button>
+      <a class="button button-primary" id="schedule-job-button" href="${buildJobScheduleUrl(job.id, location.pathname, location.search)}">${job.scheduleState === 'scheduled' ? 'Reschedule' : 'Schedule'}</a>
       <button class="button" id="edit-team-button">${job.assignmentState === 'assigned' ? 'Reassign' : 'Assign'}</button>
       <button class="button button-danger" id="unschedule-job-button" ${job.scheduleState === 'scheduled' ? '' : 'disabled'}>Unschedule</button>
       <a class="button button-ghost" href="${escapeHtml(returnHref)}">${escapeHtml(returnLabel)}</a>
@@ -432,7 +798,7 @@ async function renderJobDetailPage(jobId) {
               </div>
             </div>
             <div class="inline-actions">
-              <button class="button button-primary" id="schedule-job-inline-button">${job.scheduleState === 'scheduled' ? 'Reschedule visit' : 'Schedule visit'}</button>
+              <a class="button button-primary" id="schedule-job-inline-button" href="${buildJobScheduleUrl(job.id, location.pathname, location.search)}">${job.scheduleState === 'scheduled' ? 'Reschedule visit' : 'Schedule visit'}</a>
               <button class="button" id="edit-team-inline-button">${job.assignmentState === 'assigned' ? 'Change team' : 'Assign team'}</button>
               ${job.assignmentState === 'assigned' ? '<button class="button button-ghost" id="unassign-job-inline-button">Set unassigned</button>' : ''}
             </div>
@@ -462,8 +828,6 @@ async function renderJobDetailPage(jobId) {
   });
 
   document.getElementById('edit-job-button').addEventListener('click', () => openEditJobModal(job, customer));
-  document.getElementById('schedule-job-button').addEventListener('click', () => openScheduleModal(job));
-  document.getElementById('schedule-job-inline-button').addEventListener('click', () => openScheduleModal(job));
   document.getElementById('edit-team-button').addEventListener('click', () => openTeamModal(job));
   document.getElementById('edit-team-inline-button').addEventListener('click', () => openTeamModal(job));
   document.getElementById('unassign-job-inline-button')?.addEventListener('click', async () => {
@@ -509,6 +873,7 @@ async function renderSchedulerPage() {
     breadcrumbs: [escapeHtml('Scheduler')],
     actions: `
       <div class="scheduler-actions">
+        <a class="button button-primary" href="${buildNewJobUrl({ pathname: location.pathname, search: location.search, date })}">New job</a>
         <div class="view-switcher">
           ${schedulerViewButton('day', view, date, filter)}
           ${schedulerViewButton('week', view, date, filter)}
@@ -779,7 +1144,9 @@ function renderSchedulerBacklog(jobs, options = {}) {
           <div class="scheduler-card-meta">${escapeHtml(formatAddress(job.address) || 'No address')}</div>
           <div class="scheduler-card-actions compact">
             <a class="button button-small button-ghost" href="${buildJobUrl(job.id, location.pathname, location.search)}">Open</a>
-            <button class="button button-small" data-action="${options.actionLabel === 'Assign' ? 'assign' : 'schedule'}" data-job-id="${job.id}">${escapeHtml(options.actionLabel || 'Open')}</button>
+            ${options.actionLabel === 'Assign'
+              ? `<button class="button button-small" data-action="assign" data-job-id="${job.id}">Assign</button>`
+              : `<a class="button button-small" href="${buildJobScheduleUrl(job.id, location.pathname, location.search)}">${escapeHtml(options.actionLabel || 'Schedule')}</a>`}
           </div>
         </article>
       `).join('')}
@@ -873,7 +1240,7 @@ function schedulerCard(job, options = {}) {
       <div class="scheduler-card-actions ${options.compact ? 'compact' : ''}">
         <a class="button button-small button-ghost" href="${buildJobUrl(job.id, location.pathname, location.search)}">Open</a>
         <a class="button button-small button-ghost" href="${buildCustomerUrl(job.customer?.id, location.pathname, location.search)}">Customer</a>
-        <button class="button button-small" data-action="schedule" data-job-id="${job.id}">${job.scheduleState === 'scheduled' ? 'Reschedule' : 'Schedule'}</button>
+        <a class="button button-small" href="${buildJobScheduleUrl(job.id, location.pathname, location.search)}">${job.scheduleState === 'scheduled' ? 'Reschedule' : 'Schedule'}</a>
         <button class="button button-small" data-action="assign" data-job-id="${job.id}">${job.assigneeTeamMemberId ? 'Reassign' : 'Assign'}</button>
         ${job.assigneeTeamMemberId ? `<button class="button button-small button-ghost" data-action="unassign" data-job-id="${job.id}">Set unassigned</button>` : ''}
         ${job.scheduleState === 'scheduled' ? `<button class="button button-small button-danger" data-action="unschedule" data-job-id="${job.id}">Unschedule</button>` : ''}
@@ -887,10 +1254,6 @@ function bindSchedulerQuickActions() {
     button.addEventListener('click', async (event) => {
       const { action, jobId } = event.currentTarget.dataset;
       const job = await api.getJob(jobId);
-      if (action === 'schedule') {
-        openScheduleModal(job);
-        return;
-      }
       if (action === 'assign') {
         openTeamModal(job);
         return;
@@ -919,11 +1282,11 @@ function bindSchedulerQuickActions() {
   }
 }
 
-function openCreateCustomerModal() {
-  openCustomerFormModal({ mode: 'create' });
+function openCreateCustomerModal(options = {}) {
+  openCustomerFormModal({ mode: 'create', ...options });
 }
 
-function openCustomerFormModal({ mode, customer = null }) {
+function openCustomerFormModal({ mode, customer = null, onSave = null }) {
   openModal({
     title: mode === 'create' ? 'Add customer' : `Edit ${customer.displayName}`,
     body: `
@@ -946,6 +1309,10 @@ function openCustomerFormModal({ mode, customer = null }) {
       const saved = mode === 'create'
         ? await api.createCustomer(payload)
         : await api.updateCustomer(customer.id, payload);
+      if (typeof onSave === 'function') {
+        onSave(saved);
+        return;
+      }
       setFlash(mode === 'create' ? 'Customer created.' : 'Customer saved.', 'success');
       location.href = `/app/customers/${saved.id}`;
     } catch (error) {
