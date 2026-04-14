@@ -1154,14 +1154,45 @@ button {
   gap: 12px;
 }
 
+.week-grid-shell {
+  overflow-x: auto;
+}
+
+.week-grid-strong {
+  min-width: 1120px;
+  align-items: start;
+}
+
 .week-column,
 .month-cell {
   padding: 14px;
   min-height: 180px;
 }
 
+.week-column {
+  background: linear-gradient(180deg, #fbfcff 0%, #f4f7fd 100%);
+}
+
 .week-header-strong {
   align-items: flex-start;
+}
+
+.week-summary-row-strong {
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid var(--border);
+}
+
+.week-body-strong {
+  gap: 8px;
+}
+
+.week-empty-lane {
+  min-height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .is-today {
@@ -1406,6 +1437,33 @@ button {
 
 .job-workspace-grid-strong {
   grid-template-columns: minmax(320px, 0.78fr) minmax(0, 1.22fr);
+}
+
+.new-job-left-pane,
+.new-job-schedule-pane,
+.schedule-route-pane,
+.schedule-board-pane,
+.new-job-summary-pane {
+  box-shadow: 0 14px 28px rgba(16, 24, 40, 0.04);
+}
+
+.new-job-right-column {
+  position: sticky;
+  top: 12px;
+}
+
+.schedule-route-header {
+  align-items: flex-start;
+}
+
+.schedule-hero-card {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
 }
 
 .workspace-pane {
@@ -1689,6 +1747,14 @@ button {
     grid-template-columns: 1fr;
     display: flex;
     flex-direction: column;
+  }
+
+  .new-job-right-column {
+    position: static;
+  }
+
+  .schedule-hero-card {
+    grid-template-columns: 1fr;
   }
 }
 

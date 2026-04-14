@@ -756,9 +756,12 @@ async function renderNewJobPage() {
     content: `
       <form id="new-job-page-form" class="job-workspace-grid job-workspace-grid-strong">
         <div class="stack-gap-lg">
-          <section class="surface-card stack-gap workspace-pane workspace-pane-narrow">
+          <section class="surface-card stack-gap workspace-pane workspace-pane-narrow new-job-left-pane">
             <div class="section-header">
-              <h2 class="section-title">Customer</h2>
+              <div>
+                <div class="page-eyebrow">New job</div>
+                <h2 class="section-title">Customer</h2>
+              </div>
               <button type="button" class="button button-small button-ghost" id="new-job-customer-button">+ New customer</button>
             </div>
             <label>
@@ -781,9 +784,12 @@ async function renderNewJobPage() {
             </div>
           </section>
 
-          <section class="surface-card stack-gap workspace-pane workspace-pane-narrow">
+          <section class="surface-card stack-gap workspace-pane workspace-pane-narrow new-job-schedule-pane">
             <div class="section-header">
-              <h2 class="section-title">Schedule</h2>
+              <div>
+                <div class="page-eyebrow">Schedule</div>
+                <h2 class="section-title">Schedule</h2>
+              </div>
               <div class="chip-row-inline">
                 ${customer.doNotService ? badge('Do not service', 'danger') : badge('Scheduling allowed', 'success')}
               </div>
@@ -828,10 +834,13 @@ async function renderNewJobPage() {
           </section>
         </div>
 
-        <div class="stack-gap-lg">
-          <section class="surface-card stack-gap workspace-pane workspace-pane-wide">
+        <div class="stack-gap-lg new-job-right-column">
+          <section class="surface-card stack-gap workspace-pane workspace-pane-wide new-job-summary-pane">
             <div class="section-header">
-              <h2 class="section-title">Private notes</h2>
+              <div>
+                <div class="page-eyebrow">Pricing and notes</div>
+                <h2 class="section-title">Private notes</h2>
+              </div>
               <div class="segmented-pill">
                 <span class="is-active">This job</span>
                 <span>Customer</span>
@@ -845,7 +854,10 @@ async function renderNewJobPage() {
 
           <section class="surface-card stack-gap workspace-pane workspace-pane-wide">
             <div class="section-header">
-              <h2 class="section-title">Line items</h2>
+              <div>
+                <div class="page-eyebrow">Line items</div>
+                <h2 class="section-title">Services and materials</h2>
+              </div>
               <div class="chip-row-inline">
                 ${badge('One-time job', 'neutral')}
                 ${badge('V1-safe fields only', 'warning')}
@@ -1011,12 +1023,29 @@ async function renderJobSchedulePage(jobId) {
     `,
     content: `
       <div class="job-workspace-grid job-workspace-grid-strong">
-        <form id="schedule-route-form" class="surface-card stack-gap workspace-pane workspace-pane-narrow">
-          <div class="section-header">
-            <h2 class="section-title">Schedule a time for job</h2>
+        <form id="schedule-route-form" class="surface-card stack-gap workspace-pane workspace-pane-narrow schedule-route-pane">
+          <div class="section-header schedule-route-header">
+            <div>
+              <div class="page-eyebrow">Schedule</div>
+              <h2 class="section-title">Schedule a time for job</h2>
+            </div>
             <div class="chip-row-inline">
               ${job.scheduleState === 'scheduled' ? badge('Scheduled', 'success') : badge('Unscheduled', 'warning')}
               ${job.assignee?.displayName ? badge(job.assignee.displayName, 'neutral') : badge('Unassigned', 'warning')}
+            </div>
+          </div>
+          <div class="schedule-hero-card">
+            <div>
+              <div class="label">Job</div>
+              <strong>${escapeHtml(job.jobNumber)} • ${escapeHtml(job.titleOrServiceSummary)}</strong>
+            </div>
+            <div>
+              <div class="label">Customer</div>
+              <strong>${escapeHtml(job.customer.displayName)}</strong>
+            </div>
+            <div>
+              <div class="label">Timezone</div>
+              <strong>CDT</strong>
             </div>
           </div>
           <div class="form-grid two-columns">
@@ -1150,9 +1179,12 @@ async function renderJobSchedulePage(jobId) {
           </div>
         </form>
 
-        <section class="surface-card stack-gap scheduler-embedded-panel workspace-pane workspace-pane-wide">
+        <section class="surface-card stack-gap scheduler-embedded-panel workspace-pane workspace-pane-wide schedule-board-pane">
           <div class="section-header">
-            <h2 class="section-title">Day board</h2>
+            <div>
+              <div class="page-eyebrow">Live board</div>
+              <h2 class="section-title">Day board</h2>
+            </div>
             <div class="inline-actions">
               <a class="button button-small button-ghost" href="${buildDayUrl(focusDate)}">Open full day</a>
             </div>
@@ -1698,30 +1730,32 @@ function renderWeekSchedulerView(date, schedule, filter, lanes = []) {
   const jobsByDay = groupJobsByDay(schedule.jobs, start, end);
 
   return `
-    <div class="week-grid">
-      ${days.map((day) => {
-        const dayJobs = (jobsByDay.get(day) || []).sort(compareJobs);
-        const daySummary = summarizeDayJobs(dayJobs);
-        return `
-          <section class="week-column ${day === localToday() ? 'is-today' : ''} ${day === date ? 'is-focused-day' : ''}">
-            <div class="week-header week-header-strong">
-              <div>
-                <div class="week-weekday">${escapeHtml(weekdayLabel(day))}</div>
-                <div class="week-date">${escapeHtml(shortDayLabel(day))}</div>
+    <div class="week-grid-shell">
+      <div class="week-grid week-grid-strong">
+        ${days.map((day) => {
+          const dayJobs = (jobsByDay.get(day) || []).sort(compareJobs);
+          const daySummary = summarizeDayJobs(dayJobs);
+          return `
+            <section class="week-column ${day === localToday() ? 'is-today' : ''} ${day === date ? 'is-focused-day' : ''}">
+              <div class="week-header week-header-strong">
+                <div>
+                  <div class="week-weekday">${escapeHtml(weekdayLabel(day).toUpperCase())}</div>
+                  <div class="week-date">${escapeHtml(shortDayLabel(day))}</div>
+                </div>
+                <a class="button button-small button-ghost" href="${buildDayUrl(day, filter, lanes)}">Open day</a>
               </div>
-              <a class="button button-small button-ghost" href="${buildDayUrl(day, filter, lanes)}">Open day</a>
-            </div>
-            <div class="week-summary-row">
-              <span>${daySummary.total} job${daySummary.total === 1 ? '' : 's'}</span>
-              <span>${daySummary.unassigned} unassigned</span>
-            </div>
-            <div class="week-body">
-              ${dayJobs.length ? dayJobs.slice(0, 4).map((job) => schedulerCard(job, { compact: true, view: 'week', filter })).join('') : `<div class="empty-lane">No jobs on this day</div>`}
-              ${dayJobs.length > 4 ? `<a class="more-link" href="${buildDayUrl(day, filter, lanes)}">Open day to view ${dayJobs.length - 4} more</a>` : ''}
-            </div>
-          </section>
-        `;
-      }).join('')}
+              <div class="week-summary-row week-summary-row-strong">
+                <span>${daySummary.total} job${daySummary.total === 1 ? '' : 's'}</span>
+                <span>${daySummary.unassigned} unassigned</span>
+              </div>
+              <div class="week-body week-body-strong">
+                ${dayJobs.length ? dayJobs.slice(0, 5).map((job) => schedulerCard(job, { compact: true, view: 'week', filter })).join('') : `<div class="empty-lane week-empty-lane">No jobs on this day</div>`}
+                ${dayJobs.length > 5 ? `<a class="more-link" href="${buildDayUrl(day, filter, lanes)}">Open day to view ${dayJobs.length - 5} more</a>` : ''}
+              </div>
+            </section>
+          `;
+        }).join('')}
+      </div>
     </div>
   `;
 }
