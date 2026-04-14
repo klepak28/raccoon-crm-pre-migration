@@ -29,3 +29,25 @@ test('rejects customer when displayName and firstName are both missing', () => {
 test('rejects malformed email', () => {
   assert.throws(() => validateCustomerInput({ displayName: 'Bad Email', email: 'nope', customerType: 'Homeowner' }), /syntactically valid/);
 });
+
+test('do-not-service turns notifications off on create payloads', () => {
+  const result = validateCustomerInput({
+    displayName: 'Blocked Customer',
+    customerType: 'Homeowner',
+    doNotService: true,
+    sendNotifications: true,
+  });
+
+  assert.equal(result.doNotService, true);
+  assert.equal(result.sendNotifications, false);
+});
+
+test('do-not-service patch forces notifications off', () => {
+  const result = validateCustomerInput({
+    doNotService: true,
+    sendNotifications: true,
+  }, { partial: true });
+
+  assert.equal(result.doNotService, true);
+  assert.equal(result.sendNotifications, false);
+});

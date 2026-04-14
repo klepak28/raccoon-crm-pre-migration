@@ -2,8 +2,9 @@ import { readJsonBody, sendJson, sendHtml, matchRoute } from '../lib/http.js';
 import { validateCustomerInput } from '../validation/customers/customer-input.validator.js';
 import { validateAssignJobInput } from '../validation/jobs/assign-job.validator.js';
 import { validateJobInput } from '../validation/jobs/job-input.validator.js';
+import { validateJobListFilters } from '../validation/jobs/job-list-filters.validator.js';
 import { validateScheduleJobInput } from '../validation/jobs/schedule-job.validator.js';
-import { assertNoUnsupportedV1Fields } from '../lib/validation.js';
+import { assertNoMultiAssigneeFields, assertNoUnsupportedV1Fields } from '../lib/validation.js';
 
 function renderAppShell(title) {
   return `<!doctype html>
@@ -87,11 +88,9 @@ export async function handleRoute({ req, res, url, context }) {
   }
 
   if (req.method === 'GET' && url.pathname === '/api/jobs') {
+    const filters = validateJobListFilters(url.searchParams);
     sendJson(res, 200, {
-      items: services.jobs.listJobs({
-        scheduleState: url.searchParams.get('scheduleState') || null,
-        customerId: url.searchParams.get('customerId') || null,
-      }),
+      items: services.jobs.listJobs(filters),
     });
     return true;
   }
@@ -121,6 +120,7 @@ export async function handleRoute({ req, res, url, context }) {
   if (unscheduleParams && req.method === 'POST') {
     const body = await readJsonBody(req);
     assertNoUnsupportedV1Fields(body);
+    assertNoMultiAssigneeFields(body);
     sendJson(res, 200, { item: services.jobs.unscheduleJob(unscheduleParams.jobId) });
     return true;
   }
@@ -137,6 +137,7 @@ export async function handleRoute({ req, res, url, context }) {
   if (unassignParams && req.method === 'POST') {
     const body = await readJsonBody(req);
     assertNoUnsupportedV1Fields(body);
+    assertNoMultiAssigneeFields(body);
     sendJson(res, 200, { item: services.jobs.unassignJob(unassignParams.jobId) });
     return true;
   }

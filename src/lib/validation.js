@@ -20,10 +20,26 @@ export const UNSUPPORTED_V1_FIELDS = [
   'invoiceReminderRule',
 ];
 
+export const MULTI_ASSIGNEE_V1_FIELDS = [
+  'assignees',
+  'assigneeIds',
+  'teamMemberIds',
+  'teamMembers',
+];
+
 export function assertNoUnsupportedV1Fields(input) {
   const unsupported = UNSUPPORTED_V1_FIELDS.filter((field) => field in (input || {}));
   if (unsupported.length > 0) {
     throw httpError(400, 'UNSUPPORTED_V1_FIELDS', 'Payload contains fields outside the approved V1 slice', {
+      unsupportedFields: unsupported,
+    });
+  }
+}
+
+export function assertNoMultiAssigneeFields(input) {
+  const unsupported = MULTI_ASSIGNEE_V1_FIELDS.filter((field) => field in (input || {}));
+  if (unsupported.length > 0) {
+    throw httpError(400, 'MULTI_ASSIGNEE_NOT_SUPPORTED', 'V1 supports exactly one assignee or Unassigned', {
       unsupportedFields: unsupported,
     });
   }

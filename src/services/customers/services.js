@@ -1,9 +1,10 @@
 import { httpError } from '../../lib/http.js';
+import { compareJobsForOperations } from '../../domain/jobs/job-ordering.js';
 
 export function createCustomerServices({ customerRepository, jobRepository, teamMemberRepository }) {
   return {
     createCustomer(input) {
-      return customerRepository.create(input);
+      return customerRepository.create(applyCustomerInvariants(input));
     },
     listCustomers() {
       return customerRepository.list().map((customer) => ({
@@ -25,15 +26,7 @@ export function createCustomerServices({ customerRepository, jobRepository, team
       }
       const jobs = jobRepository
         .listByCustomerId(customerId)
-        .sort((left, right) => {
-          if (left.scheduleState !== right.scheduleState) {
-            return left.scheduleState === 'scheduled' ? -1 : 1;
-          }
-          if (left.scheduleState === 'scheduled') {
-            return new Date(left.scheduledStartAt).getTime() - new Date(right.scheduledStartAt).getTime();
-          }
-          return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
-        })
+        .sort(compareJobsForOperations)
         .map((job) => ({
           id: job.id,
           jobNumber: job.jobNumber,
@@ -56,7 +49,7 @@ export function createCustomerServices({ customerRepository, jobRepository, team
       if (!existing) {
         throw httpError(404, 'CUSTOMER_NOT_FOUND', 'Customer not found');
       }
-      const merged = { ...existing, ...patch };
+      const merged = applyCustomerInvariants({ ...existing, ...patch });
       if (!merged.displayName && !merged.firstName) {
         throw httpError(400, 'CUSTOMER_IDENTITY_REQUIRED', 'Customer requires either displayName or firstName');
       }
@@ -64,6 +57,13 @@ export function createCustomerServices({ customerRepository, jobRepository, team
       return updated;
     },
   };
+}
+
+function applyCustomerInvariants(customer) {
+  if (customer.doNotService) {
+    customer.sendNotifications = false;
+  }
+  return customer;
 }
 
 function formatAddressSummary(address) {

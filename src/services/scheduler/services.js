@@ -1,5 +1,6 @@
 import { httpError } from '../../lib/http.js';
-import { compareDateTimes, intersectsDateRange, intersectsDay, isIsoDate } from '../../lib/time.js';
+import { intersectsDateRange, intersectsDay, isIsoDate } from '../../lib/time.js';
+import { compareScheduledJobs } from '../../domain/jobs/job-ordering.js';
 
 export function createSchedulerServices({ jobRepository, customerRepository, teamMemberRepository }) {
   return {
@@ -11,7 +12,7 @@ export function createSchedulerServices({ jobRepository, customerRepository, tea
       const scheduledJobs = jobRepository
         .listScheduled()
         .filter((job) => intersectsDay(job.scheduledStartAt, job.scheduledEndAt, date))
-        .sort((left, right) => compareDateTimes(left.scheduledStartAt, right.scheduledStartAt));
+        .sort(compareScheduledJobs);
 
       const activeTeamMembers = teamMemberRepository
         .listActive()
@@ -47,7 +48,7 @@ export function createSchedulerServices({ jobRepository, customerRepository, tea
       const jobs = jobRepository
         .listScheduled()
         .filter((job) => intersectsDateRange(job.scheduledStartAt, job.scheduledEndAt, startDate, endDate))
-        .sort((left, right) => compareDateTimes(left.scheduledStartAt, right.scheduledStartAt))
+        .sort(compareScheduledJobs)
         .map((job) => toScheduleJob(job, customerRepository, teamMemberRepository));
 
       const lanes = [

@@ -59,10 +59,10 @@ export function validateCustomerInput(input, { partial = false } = {}) {
     if (hasAnyEmailInput(input)) patch.emails = emails;
     if (hasAnyAddressInput(input)) patch.addresses = addresses;
 
-    return patch;
+    return applyDoNotServiceInvariant(patch);
   }
 
-  const normalized = {
+  const normalized = applyDoNotServiceInvariant({
     firstName,
     lastName,
     displayName: displayName || deriveDisplayName({ firstName, lastName, companyName }),
@@ -79,11 +79,18 @@ export function validateCustomerInput(input, { partial = false } = {}) {
     phones,
     emails,
     addresses,
-  };
+  });
 
   assertRequired(Boolean(normalized.displayName || normalized.firstName), 'CUSTOMER_IDENTITY_REQUIRED', 'Customer requires either displayName or firstName');
 
   return normalized;
+}
+
+function applyDoNotServiceInvariant(customer) {
+  if (customer.doNotService) {
+    customer.sendNotifications = false;
+  }
+  return customer;
 }
 
 function deriveDisplayName({ firstName, lastName, companyName }) {

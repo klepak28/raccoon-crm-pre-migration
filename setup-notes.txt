@@ -1,0 +1,5 @@
+OpenClaw autonomy setup notes
+- node host enabled and paired
+- browser profile gmail-debug configured for CDP :9222
+- acpx updated to latest
+- workspace initialized

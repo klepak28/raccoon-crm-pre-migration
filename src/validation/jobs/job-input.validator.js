@@ -1,7 +1,14 @@
-import { asTrimmedString, assertNoUnsupportedV1Fields, assertRequired, normalizeTags } from '../../lib/validation.js';
+import {
+  asTrimmedString,
+  assertNoMultiAssigneeFields,
+  assertNoUnsupportedV1Fields,
+  assertRequired,
+  normalizeTags,
+} from '../../lib/validation.js';
 
 export function validateJobInput(input) {
   assertNoUnsupportedV1Fields(input);
+  assertNoMultiAssigneeFields(input);
 
   const titleOrServiceSummary = asTrimmedString(input.titleOrServiceSummary || input.description || input.serviceSummary);
   const customerAddressId = asTrimmedString(input.customerAddressId);

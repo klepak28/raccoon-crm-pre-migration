@@ -1,9 +1,15 @@
 import { httpError } from '../../lib/http.js';
 import { isIsoDateTime } from '../../lib/time.js';
-import { asTrimmedString, assertNoUnsupportedV1Fields, assertRequired } from '../../lib/validation.js';
+import {
+  asTrimmedString,
+  assertNoMultiAssigneeFields,
+  assertNoUnsupportedV1Fields,
+  assertRequired,
+} from '../../lib/validation.js';
 
 export function validateScheduleJobInput(input) {
   assertNoUnsupportedV1Fields(input);
+  assertNoMultiAssigneeFields(input);
 
   const scheduledStartAt = asTrimmedString(input.scheduledStartAt || input.startAt);
   const scheduledEndAt = asTrimmedString(input.scheduledEndAt || input.endAt);

@@ -80,11 +80,23 @@ test('patching doNotService only preserves all identity and contact data', () =>
   const updated = context.services.customers.updateCustomerBasic(customer.id, patch);
 
   assert.equal(updated.doNotService, true);
+  assert.equal(updated.sendNotifications, false);
   assert.equal(updated.displayName, 'Patch Target');
   assert.equal(updated.phones.length, 1);
   assert.equal(updated.emails.length, 1);
   assert.equal(updated.addresses.length, 1);
   assert.deepEqual(updated.tags, ['vip', 'north']);
+});
+
+test('notifications cannot be re-enabled while customer remains do-not-service', () => {
+  const context = createContext();
+  const customer = createFullCustomer(context);
+
+  context.services.customers.updateCustomerBasic(customer.id, validateCustomerInput({ doNotService: true }, { partial: true }));
+  const updated = context.services.customers.updateCustomerBasic(customer.id, { sendNotifications: true });
+
+  assert.equal(updated.doNotService, true);
+  assert.equal(updated.sendNotifications, false);
 });
 
 test('effective post-merge identity is valid after patching non-identity fields', () => {

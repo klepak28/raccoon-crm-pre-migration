@@ -1,13 +1,33 @@
 import { httpError } from '../../lib/http.js';
+import { intersectsDateRange } from '../../lib/time.js';
+import { compareJobsForOperations } from '../../domain/jobs/job-ordering.js';
 
 export function createJobServices({ customerRepository, jobRepository, teamMemberRepository }) {
   return {
     listJobs(filters = {}) {
-      const { scheduleState = null, customerId = null } = filters;
+      const {
+        scheduleState = null,
+        assignmentState = null,
+        customerId = null,
+        startDate = null,
+        endDate = null,
+      } = filters;
+
       return jobRepository
         .list()
         .filter((job) => (scheduleState ? job.scheduleState === scheduleState : true))
+        .filter((job) => {
+          if (!assignmentState) return true;
+          return assignmentState === 'assigned'
+            ? Boolean(job.assigneeTeamMemberId)
+            : !job.assigneeTeamMemberId;
+        })
         .filter((job) => (customerId ? job.customerId === customerId : true))
+        .filter((job) => {
+          if (!startDate || !endDate) return true;
+          if (job.scheduleState !== 'scheduled') return false;
+          return intersectsDateRange(job.scheduledStartAt, job.scheduledEndAt, startDate, endDate);
+        })
         .sort(compareJobsForOperations)
         .map((job) => toJobSummary(job, customerRepository, teamMemberRepository));
     },
@@ -146,14 +166,4 @@ function toJobSummary(job, customerRepository, teamMemberRepository) {
     createdAt: job.createdAt,
     updatedAt: job.updatedAt,
   };
-}
-
-function compareJobsForOperations(left, right) {
-  if (left.scheduleState !== right.scheduleState) {
-    return left.scheduleState === 'scheduled' ? -1 : 1;
-  }
-  if (left.scheduleState === 'scheduled') {
-    return new Date(left.scheduledStartAt).getTime() - new Date(right.scheduledStartAt).getTime();
-  }
-  return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
 }
