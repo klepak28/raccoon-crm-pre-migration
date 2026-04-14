@@ -1468,19 +1468,32 @@ async function renderSchedulerPage() {
     content: `
       <section class="surface-card stack-gap-lg scheduler-surface">
         <div class="scheduler-toolbar-shell">
-          <div class="inline-actions">
-            <button class="button" type="button" data-shell-action="bulk actions">Bulk actions</button>
+          <div class="inline-actions scheduler-toolbar-left">
+            <button class="icon-button" type="button" data-shell-action="schedule rail" aria-label="Schedule rail">☰</button>
             <a class="button" href="${buildSchedulerUrl({ view, date: localToday(), filter, lanes: selectedLaneIds })}">Today</a>
+            <button class="button" type="button" data-shell-action="bulk actions">Bulk actions</button>
             <a class="button button-ghost" href="${buildSchedulerUrl({ view, date: stepAnchorDay(view, date, -1), filter, lanes: selectedLaneIds })}">Previous</a>
             <a class="button button-ghost" href="${buildSchedulerUrl({ view, date: stepAnchorDay(view, date, 1), filter, lanes: selectedLaneIds })}">Next</a>
           </div>
           <div class="inline-actions scheduler-toolbar-center">
-            <div class="scheduler-date-pill">${escapeHtml(formatRangeLabel('day', date))}</div>
+            <div class="scheduler-date-pill">${escapeHtml(formatRangeLabel(view === 'month' ? 'month' : 'day', date))}</div>
             <button class="icon-button" type="button" data-shell-action="calendar view" aria-label="Calendar view">📅</button>
             <button class="icon-button" type="button" data-shell-action="map view" aria-label="Map view">📍</button>
           </div>
           <div class="inline-actions scheduler-toolbar-right">
             <button class="button button-ghost" type="button" data-shell-action="color by employee">Color by: Employee</button>
+            <form id="scheduler-view-form" class="inline-actions compact-form scheduler-view-form">
+              <label>
+                <span class="label-inline">View</span>
+                <select name="view">
+                  <option value="day" ${view === 'day' ? 'selected' : ''}>Day</option>
+                  <option value="week" ${view === 'week' ? 'selected' : ''}>Week</option>
+                  <option value="month" ${view === 'month' ? 'selected' : ''}>Month</option>
+                </select>
+              </label>
+              <input type="hidden" name="date" value="${escapeHtml(date)}" />
+              <input type="hidden" name="filter" value="${escapeHtml(filter)}" />
+            </form>
             <form id="scheduler-jump-form" class="inline-actions compact-form scheduler-date-jump">
               <label>
                 <span class="label-inline">Focus date</span>
@@ -1490,6 +1503,7 @@ async function renderSchedulerPage() {
               <input type="hidden" name="filter" value="${escapeHtml(filter)}" />
               <button class="button button-primary" type="submit">Go</button>
             </form>
+            <button class="icon-button" type="button" data-shell-action="scheduler settings" aria-label="Scheduler settings">⚙️</button>
           </div>
         </div>
         <div class="scheduler-context-bar scheduler-context-bar-strong">
@@ -1506,17 +1520,17 @@ async function renderSchedulerPage() {
         <div class="scheduler-layout">
           <aside class="scheduler-rail">
             <div class="rail-card stack-gap">
-              <h2 class="section-title">Mini month</h2>
+              <div class="rail-card-head"><h2 class="section-title">${escapeHtml(formatRangeLabel('month', date))}</h2><span class="rail-card-kicker">Mini month</span></div>
               ${renderMiniMonthRail({ view, date, filter, selectedLaneIds })}
             </div>
             <div class="rail-card stack-gap">
-              <h2 class="section-title">Scheduler focus</h2>
+              <div class="rail-card-head"><h2 class="section-title">Scheduler focus</h2><span class="rail-card-kicker">Live board</span></div>
               <div class="rail-focus-date">${escapeHtml(formatRangeLabel('day', date))}</div>
               <div class="rail-copy">Drill into day view, scan the range, or filter by customer, service, or tag.</div>
               <a class="button button-primary" href="${buildDayUrl(date, filter, selectedLaneIds)}">Open focused day</a>
             </div>
             <div class="rail-card stack-gap">
-              <h2 class="section-title">Filter by name or tag</h2>
+              <div class="rail-card-head"><h2 class="section-title">Filter by name or tag</h2><span class="rail-card-kicker">Quick search</span></div>
               <form id="scheduler-filter-form" class="stack-gap compact-form">
                 <label>
                   <span class="label-inline">Filter</span>
@@ -1531,11 +1545,11 @@ async function renderSchedulerPage() {
               </form>
             </div>
             <div class="rail-card stack-gap">
-              <h2 class="section-title">Areas</h2>
+              <div class="rail-card-head"><h2 class="section-title">Areas</h2><span class="rail-card-kicker">Color by area</span></div>
               <button class="button button-ghost scheduler-unsupported-pill" type="button" data-shell-action="areas">Area filtering is not supported in V1</button>
             </div>
             <div class="rail-card stack-gap">
-              <h2 class="section-title">Employees</h2>
+              <div class="rail-card-head"><h2 class="section-title">Employees</h2><span class="rail-card-kicker">Team filters</span></div>
               <a class="button button-small button-ghost" href="/app/settings">Manage teams</a>
               <form id="scheduler-lane-filter-form" class="stack-gap compact-form">
                 ${renderLaneFilterOptions(schedule, selectedLaneIds)}
@@ -1580,6 +1594,11 @@ async function renderSchedulerPage() {
     location.href = buildSchedulerUrl({ view: form.get('view'), date: form.get('date'), filter: form.get('filter'), lanes: selectedLaneIds });
   });
 
+  document.getElementById('scheduler-view-form').addEventListener('change', (event) => {
+    const form = new FormData(event.currentTarget);
+    location.href = buildSchedulerUrl({ view: form.get('view'), date: form.get('date'), filter: form.get('filter'), lanes: selectedLaneIds });
+  });
+
   document.getElementById('scheduler-filter-form').addEventListener('submit', (event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -1615,6 +1634,7 @@ function renderDaySchedulerView(date, schedule, filter, lanes = []) {
     lane.id,
     new Map(visibleHours.map((hour) => [hour, []])),
   ]));
+  const currentTimeLine = renderCurrentTimeLine(date, visibleHours, schedule.lanes.length);
 
   for (const job of schedule.jobs) {
     if (jobDayKeys(job, date, date).includes(date)) {
@@ -1628,6 +1648,7 @@ function renderDaySchedulerView(date, schedule, filter, lanes = []) {
 
   return `
     <div class="calendar-day-grid-shell">
+      <div class="calendar-day-grid-wrap">
       <div class="calendar-day-grid" style="grid-template-columns: 88px repeat(${schedule.lanes.length}, minmax(180px, 1fr));">
         <div class="calendar-corner-cell">
           <div class="timezone-pill">GMT-05</div>
@@ -1646,7 +1667,7 @@ function renderDaySchedulerView(date, schedule, filter, lanes = []) {
         }).join('')}
 
         ${visibleHours.map((hour) => {
-          const row = [`<div class="calendar-hour-cell">${escapeHtml(formatHourLabel(hour))}</div>`];
+          const row = [`<div class="calendar-hour-cell"><span>${escapeHtml(formatHourLabel(hour))}</span></div>`];
           for (const lane of schedule.lanes) {
             const laneJobs = (jobsByLaneAndHour.get(lane.id)?.get(hour) || []).sort(compareJobs);
             row.push(`
@@ -1659,6 +1680,8 @@ function renderDaySchedulerView(date, schedule, filter, lanes = []) {
           }
           return row.join('');
         }).join('')}
+      </div>
+      ${currentTimeLine}
       </div>
       ${schedule.jobs.some((job) => !job.assigneeTeamMemberId)
         ? '<div class="table-meta">Unassigned jobs stay in their own column until a team is selected.</div>'
@@ -1712,7 +1735,7 @@ function renderMonthSchedulerView(date, schedule, filter, lanes = []) {
 
   return `
     <div class="month-grid month-grid-head">
-      ${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((label) => `<div class="month-head-cell">${label}</div>`).join('')}
+      ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((label) => `<div class="month-head-cell">${label}</div>`).join('')}
     </div>
     <div class="month-grid">
       ${days.map((day) => {
@@ -1793,7 +1816,7 @@ function renderMiniMonthRail({ view, date, filter = '', selectedLaneIds = [] }) 
         <a class="button button-small button-ghost" href="${buildSchedulerUrl({ view, date: stepAnchorDay('month', date, 1), filter, lanes: selectedLaneIds })}">Next</a>
       </div>
       <div class="mini-month-weekdays">
-        ${['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((label) => `<span>${label}</span>`).join('')}
+        ${['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((label) => `<span>${label}</span>`).join('')}
       </div>
       <div class="mini-month-grid">
         ${listDays(gridStart, gridEnd).map((day) => `
@@ -2563,8 +2586,12 @@ function renderDayEventCard(job) {
   return `
     <a class="calendar-event draggable-job ${!job.assigneeTeamMemberId ? 'is-unassigned' : ''}" draggable="true" data-calendar-job-id="${job.id}" ${colorStyleAttr(job.assignmentColor, '--team-color')} href="${buildJobUrl(job.id, location.pathname, location.search)}">
       <div class="calendar-event-time">${escapeHtml(formatTime(job.scheduledStartAt))} to ${escapeHtml(formatTime(job.scheduledEndAt))} ${recurringIcon}</div>
-      <div class="calendar-event-title">${escapeHtml(job.titleOrServiceSummary)}</div>
+      <div class="calendar-event-title-row">
+        <div class="calendar-event-title">${escapeHtml(job.titleOrServiceSummary)}</div>
+        <span class="calendar-event-chip">${escapeHtml(job.assigneeTeamMemberId ? (job.assignmentLabel || 'Assigned') : 'Unassigned')}</span>
+      </div>
       <div class="calendar-event-meta">${escapeHtml(job.customer?.displayName || 'Unknown customer')}</div>
+      <div class="calendar-event-meta">${escapeHtml(formatAddress(job.address) || 'No address')}</div>
     </a>
   `;
 }
@@ -2575,6 +2602,7 @@ function renderMonthEventBar(job) {
     <a class="month-event-bar ${!job.assigneeTeamMemberId ? 'is-unassigned' : ''}" ${colorStyleAttr(job.assignmentColor, '--team-color')} href="${buildJobUrl(job.id, location.pathname, location.search)}">
       <span class="month-event-time">${escapeHtml(formatTime(job.scheduledStartAt))}</span>
       <span class="month-event-label">${escapeHtml(job.titleOrServiceSummary)}${recurringIcon}</span>
+      ${!job.assigneeTeamMemberId ? '<span class="month-event-dot"></span>' : ''}
     </a>
   `;
 }
@@ -2588,6 +2616,19 @@ function formatHourLabel(hour) {
 function colorStyleAttr(color, variableName = '--team-color') {
   const safeColor = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(String(color || '')) ? color : '#5b7cff';
   return `style="${variableName}:${safeColor}"`;
+}
+
+function renderCurrentTimeLine(date, visibleHours, laneCount) {
+  if (date !== localToday()) return '';
+  const now = new Date();
+  const startHour = visibleHours[0];
+  const endHour = visibleHours[visibleHours.length - 1] + 1;
+  const hourValue = now.getHours() + (now.getMinutes() / 60);
+  if (hourValue < startHour || hourValue > endHour) return '';
+  const rowHeight = 104;
+  const headerHeight = 72;
+  const top = headerHeight + ((hourValue - startHour) * rowHeight);
+  return `<div class="calendar-now-line" style="top:${top}px; left:88px; width:calc(100% - 88px);"><span class="calendar-now-dot"></span></div>`;
 }
 
 function deriveInitials(displayName) {

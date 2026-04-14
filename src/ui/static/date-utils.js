@@ -34,8 +34,7 @@ export function addDays(dayKey, amount) {
 export function startOfWeek(dayKey) {
   const date = parseDayKey(dayKey);
   const day = date.getDay();
-  const delta = day === 0 ? -6 : 1 - day;
-  date.setDate(date.getDate() + delta);
+  date.setDate(date.getDate() - day);
   return formatDayKey(date);
 }
 
