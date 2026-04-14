@@ -267,6 +267,135 @@ button {
   gap: 10px;
 }
 
+.settings-layout {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.settings-sidebar {
+  position: sticky;
+  top: 18px;
+}
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-nav-item {
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+}
+
+.settings-nav-item.is-active,
+.settings-nav-item:hover {
+  background: #eef4ff;
+  border-color: #d9e5ff;
+  color: var(--primary);
+}
+
+.settings-main {
+  min-width: 0;
+}
+
+.settings-hero {
+  background: linear-gradient(180deg, #f8fbff 0%, #edf3ff 100%);
+}
+
+.settings-hero-header {
+  align-items: center;
+}
+
+.settings-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.settings-summary-card {
+  padding: 16px 18px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.settings-summary-card span {
+  display: block;
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.settings-summary-card strong {
+  font-size: 24px;
+}
+
+.settings-employees-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-employee-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(160px, 0.7fr) minmax(120px, 0.5fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: var(--panel-muted);
+}
+
+.settings-employee-main,
+.settings-employee-color {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.settings-employee-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  flex: 0 0 42px;
+}
+
+.settings-employee-avatar.is-large {
+  width: 54px;
+  height: 54px;
+  border-radius: 16px;
+  flex-basis: 54px;
+}
+
+.settings-employee-actions {
+  justify-content: flex-end;
+}
+
+.team-member-color-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: var(--panel-muted);
+}
+
 .settings-tab {
   padding: 10px 14px;
   border-radius: 999px;
@@ -829,6 +958,7 @@ button {
   flex-direction: column;
   gap: 8px;
   background: white;
+  transition: background 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
 }
 
 .calendar-slot.is-unassigned {
@@ -851,6 +981,11 @@ button {
   text-decoration: none;
 }
 
+.calendar-slot.is-drop-target {
+  background: #eef4ff;
+  box-shadow: inset 0 0 0 2px #7da2ff;
+}
+
 .calendar-event {
   display: flex;
   flex-direction: column;
@@ -861,6 +996,7 @@ button {
   background: color-mix(in srgb, var(--team-color, #5b7cff) 16%, white);
   color: var(--text);
   box-shadow: 0 4px 12px rgba(34, 81, 204, 0.08);
+  cursor: grab;
 }
 
 .calendar-event.is-unassigned {
@@ -871,6 +1007,11 @@ button {
 .calendar-event:hover,
 .month-event-bar:hover {
   text-decoration: none;
+}
+
+.draggable-job.is-dragging {
+  opacity: 0.52;
+  transform: scale(0.98);
 }
 
 .calendar-event-time {
@@ -1110,6 +1251,10 @@ button {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.backlog-card.draggable-job {
+  cursor: grab;
 }
 
 .backlog-card-warning {
@@ -1458,6 +1603,15 @@ button {
     grid-template-columns: 1fr;
   }
 
+  .settings-layout,
+  .settings-summary-grid,
+  .settings-employee-row,
+  .team-member-color-card {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .context-stats {
     width: 100%;
   }
@@ -1488,6 +1642,8 @@ button {
   .week-summary-row,
   .month-day-summary,
   .customer-picker-row,
+  .settings-employee-main,
+  .settings-employee-color,
   .top-nav {
     grid-template-columns: 1fr;
     flex-direction: column;

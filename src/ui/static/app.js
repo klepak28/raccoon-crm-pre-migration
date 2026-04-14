@@ -341,30 +341,70 @@ async function renderCustomersListPage() {
 async function renderSettingsPage() {
   state.teamMembers = await api.listTeamMembers();
   const teamMembers = state.teamMembers;
+  const activeCount = teamMembers.filter((member) => member.activeOnSchedule !== false).length;
 
   renderShell({
     title: 'Settings',
-    subtitle: 'Manage scheduler teams and their colors.',
+    subtitle: 'Employees and team colors used by the scheduler.',
     nav: 'scheduler',
     breadcrumbs: ['<a href="/app/calendar_new">Scheduler</a>', 'Settings'],
-    actions: `
-      <button class="button button-primary" id="create-team-button">Add team</button>
-    `,
     content: `
-      <section class="surface-card stack-gap-lg">
-        <div class="settings-tabs">
-          <button class="settings-tab is-active" type="button">Employees</button>
-        </div>
-        <div class="section-header">
+      <section class="settings-layout">
+        <aside class="surface-card settings-sidebar stack-gap">
           <div>
-            <h2 class="section-title">Employees</h2>
-            <p class="section-copy">Create the teams that appear in scheduler columns, assignment pickers, and colored calendar events.</p>
+            <div class="brand-kicker">Settings</div>
+            <h2 class="section-title">Company settings</h2>
           </div>
-          <div class="chip-row-inline">
-            ${badge(`${teamMembers.filter((member) => member.activeOnSchedule !== false).length} active`, 'success')}
+          <div class="settings-nav">
+            <button class="settings-nav-item" type="button" data-shell-action="company profile">Company profile</button>
+            <button class="settings-nav-item is-active" type="button">Employees</button>
+            <button class="settings-nav-item" type="button" data-shell-action="service list">Services</button>
+            <button class="settings-nav-item" type="button" data-shell-action="products">Products</button>
+            <button class="settings-nav-item" type="button" data-shell-action="quotes">Quotes</button>
           </div>
+        </aside>
+
+        <div class="settings-main stack-gap-lg">
+          <section class="surface-card settings-hero stack-gap-lg">
+            <div class="section-header settings-hero-header">
+              <div>
+                <div class="page-eyebrow">Settings / Employees</div>
+                <h2 class="section-title">Employees</h2>
+                <p class="section-copy">Create the teams that appear in scheduler columns, assignment pickers, and colored calendar events.</p>
+              </div>
+              <div class="inline-actions">
+                <button class="button button-primary" id="create-team-button">Add employee</button>
+              </div>
+            </div>
+            <div class="settings-summary-grid">
+              <article class="settings-summary-card">
+                <span>Total teams</span>
+                <strong>${teamMembers.length}</strong>
+              </article>
+              <article class="settings-summary-card">
+                <span>Active on schedule</span>
+                <strong>${activeCount}</strong>
+              </article>
+              <article class="settings-summary-card">
+                <span>Color-coded calendar</span>
+                <strong>On</strong>
+              </article>
+            </div>
+          </section>
+
+          <section class="surface-card stack-gap-lg settings-employees-card">
+            <div class="section-header">
+              <div>
+                <h2 class="section-title">Team members</h2>
+                <p class="section-copy">These teams power scheduler lanes and assignment dropdowns.</p>
+              </div>
+              <div class="chip-row-inline">
+                ${badge(`${activeCount} active`, 'success')}
+              </div>
+            </div>
+            <div id="team-members-region"></div>
+          </section>
         </div>
-        <div id="team-members-region"></div>
       </section>
     `,
   });
@@ -382,39 +422,28 @@ async function renderSettingsPage() {
     }
 
     region.innerHTML = `
-      <div class="table-shell">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Team</th>
-              <th>Color</th>
-              <th>Status</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            ${teamMembers.map((member) => `
-              <tr>
-                <td>
-                  <div class="team-name-cell">
-                    <span class="team-color-dot" style="background:${escapeHtml(member.color || '#5b7cff')}"></span>
-                    <div>
-                      <div class="table-title">${escapeHtml(member.displayName)}</div>
-                      <div class="table-meta">${escapeHtml(member.initials || 'TM')}</div>
-                    </div>
-                  </div>
-                </td>
-                <td><code>${escapeHtml(member.color || '#5b7cff')}</code></td>
-                <td>${member.activeOnSchedule !== false ? badge('Active', 'success') : badge('Inactive', 'warning')}</td>
-                <td>
-                  <div class="inline-actions">
-                    <button class="button button-small" type="button" data-edit-team-id="${member.id}">Edit</button>
-                  </div>
-                </td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
+      <div class="settings-employees-list">
+        ${teamMembers.map((member) => `
+          <article class="settings-employee-row">
+            <div class="settings-employee-main">
+              <span class="settings-employee-avatar" style="background:${escapeHtml(member.color || '#5b7cff')}">${escapeHtml(member.initials || 'TM')}</span>
+              <div>
+                <div class="table-title">${escapeHtml(member.displayName)}</div>
+                <div class="table-meta">${member.activeOnSchedule !== false ? 'Visible in scheduler and assignment menus' : 'Hidden from scheduler assignment'}</div>
+              </div>
+            </div>
+            <div class="settings-employee-color">
+              <span class="team-color-dot" style="background:${escapeHtml(member.color || '#5b7cff')}"></span>
+              <code>${escapeHtml(member.color || '#5b7cff')}</code>
+            </div>
+            <div class="settings-employee-status">
+              ${member.activeOnSchedule !== false ? badge('Active', 'success') : badge('Inactive', 'warning')}
+            </div>
+            <div class="settings-employee-actions inline-actions">
+              <button class="button button-small" type="button" data-edit-team-id="${member.id}">Edit</button>
+            </div>
+          </article>
+        `).join('')}
       </div>
     `;
 
@@ -1061,6 +1090,7 @@ async function renderJobSchedulePage(jobId) {
 
   bindSchedulerQuickActions();
   bindCalendarCreateActions();
+  bindCalendarDragAndDrop();
 
   document.getElementById('schedule-route-unschedule')?.addEventListener('click', async () => {
     if (!confirm('Undo the current schedule for this job?')) return;
@@ -1393,6 +1423,7 @@ async function renderSchedulerPage() {
 
   bindSchedulerQuickActions();
   bindCalendarCreateActions();
+  bindCalendarDragAndDrop();
 }
 
 function renderSchedulerView({ view, date, schedule, filter, lanes = [] }) {
@@ -1447,7 +1478,7 @@ function renderDaySchedulerView(date, schedule, filter, lanes = []) {
           for (const lane of schedule.lanes) {
             const laneJobs = (jobsByLaneAndHour.get(lane.id)?.get(hour) || []).sort(compareJobs);
             row.push(`
-              <div class="calendar-slot ${lane.id === 'unassigned' ? 'is-unassigned' : ''}" data-slot-date="${escapeHtml(date)}" data-slot-hour="${hour}">
+              <div class="calendar-slot ${lane.id === 'unassigned' ? 'is-unassigned' : ''}" data-calendar-drop-slot data-slot-date="${escapeHtml(date)}" data-slot-hour="${hour}" data-slot-lane-id="${escapeHtml(lane.id)}">
                 ${laneJobs.length
                   ? laneJobs.map((job) => renderDayEventCard(job)).join('')
                   : `<button class="calendar-slot-empty" type="button" data-empty-slot data-slot-date="${escapeHtml(date)}" data-slot-hour="${hour}">Create new job</button>`}
@@ -1629,7 +1660,7 @@ function renderSchedulerBacklog(jobs, options = {}) {
   return `
     <div class="scheduler-backlog-list">
       ${jobs.slice(0, 6).map((job) => `
-        <article class="backlog-card ${!job.assigneeTeamMemberId ? 'backlog-card-warning' : ''}">
+        <article class="backlog-card draggable-job ${!job.assigneeTeamMemberId ? 'backlog-card-warning' : ''}" draggable="true" data-calendar-job-id="${job.id}">
           <div class="scheduler-card-top">
             <a class="scheduler-card-link scheduler-card-main-link" href="${buildJobUrl(job.id, location.pathname, location.search)}"><strong>${escapeHtml(job.jobNumber)}</strong></a>
             ${job.scheduleState === 'scheduled'
@@ -1796,6 +1827,92 @@ function bindCalendarCreateActions() {
   }
 }
 
+function bindCalendarDragAndDrop() {
+  for (const card of document.querySelectorAll('[data-calendar-job-id]')) {
+    card.addEventListener('dragstart', (event) => {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', card.dataset.calendarJobId);
+      card.classList.add('is-dragging');
+    });
+
+    card.addEventListener('dragend', () => {
+      card.classList.remove('is-dragging');
+      clearCalendarDropTargets();
+    });
+  }
+
+  for (const slot of document.querySelectorAll('[data-calendar-drop-slot]')) {
+    slot.addEventListener('dragover', (event) => {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      slot.classList.add('is-drop-target');
+    });
+
+    slot.addEventListener('dragleave', () => {
+      slot.classList.remove('is-drop-target');
+    });
+
+    slot.addEventListener('drop', async (event) => {
+      event.preventDefault();
+      slot.classList.remove('is-drop-target');
+      const jobId = event.dataTransfer.getData('text/plain');
+      if (!jobId) return;
+
+      try {
+        await moveJobToCalendarSlot({
+          jobId,
+          date: slot.dataset.slotDate,
+          hour: Number(slot.dataset.slotHour),
+          laneId: slot.dataset.slotLaneId,
+        });
+      } catch (error) {
+        showTransientPageNotice(error.message, 'danger');
+      }
+    });
+  }
+}
+
+async function moveJobToCalendarSlot({ jobId, date, hour, laneId }) {
+  const job = await api.getJob(jobId);
+  const durationMinutes = Math.max(30, getJobDurationMinutes(job));
+  const startLocal = `${date}T${String(hour).padStart(2, '0')}:00`;
+  const endLocal = addMinutesToLocalDateTime(startLocal, durationMinutes);
+
+  await api.scheduleJob(jobId, {
+    scheduledStartAt: toIso(startLocal),
+    scheduledEndAt: toIso(endLocal),
+  });
+
+  if (laneId === 'unassigned') {
+    if (job.assigneeTeamMemberId) {
+      await api.unassignJob(jobId);
+    }
+  } else if (laneId) {
+    await api.assignJob(jobId, laneId);
+  }
+
+  setFlash(`Job moved to ${shortDayLabel(date)} at ${formatHourLabel(hour)}.`, 'success');
+  await renderRoute();
+}
+
+function clearCalendarDropTargets() {
+  for (const slot of document.querySelectorAll('.calendar-slot.is-drop-target')) {
+    slot.classList.remove('is-drop-target');
+  }
+}
+
+function getJobDurationMinutes(job) {
+  if (!job.scheduledStartAt || !job.scheduledEndAt) return 60;
+  const minutes = Math.round((new Date(job.scheduledEndAt).getTime() - new Date(job.scheduledStartAt).getTime()) / 60000);
+  return Number.isFinite(minutes) && minutes > 0 ? minutes : 60;
+}
+
+function addMinutesToLocalDateTime(localDateTime, minutes) {
+  const date = new Date(localDateTime);
+  date.setMinutes(date.getMinutes() + minutes);
+  return toDateTimeLocal(date.toISOString());
+}
+
 function openCalendarCreateMenu({ date, hour = 9 }) {
   const start = `${date}T${String(hour).padStart(2, '0')}:00`;
   const endHour = Math.min(hour + 1, 23);
@@ -1830,18 +1947,31 @@ function openTeamMemberModal({ mode, teamMember = null }) {
   openModal({
     title: mode === 'create' ? 'Add team' : `Edit ${teamMember.displayName}`,
     body: `
-      <form id="team-member-form" class="stack-gap modal-form">
-        <label>
-          <span>Team name</span>
-          <input name="displayName" value="${escapeHtml(teamMember?.displayName || '')}" required />
-        </label>
-        <label>
-          <span>Color</span>
+      <form id="team-member-form" class="stack-gap modal-form team-member-modal-form">
+        <div class="form-grid two-columns">
+          <label>
+            <span>Employee / team name</span>
+            <input name="displayName" value="${escapeHtml(teamMember?.displayName || '')}" required />
+          </label>
+          <label>
+            <span>Status</span>
+            <select name="activeOnSchedule">
+              <option value="true" ${teamMember?.activeOnSchedule === false ? '' : 'selected'}>Active on schedule</option>
+              <option value="false" ${teamMember?.activeOnSchedule === false ? 'selected' : ''}>Inactive</option>
+            </select>
+          </label>
+        </div>
+        <section class="team-member-color-card">
+          <div>
+            <div class="label">Color</div>
+            <div class="table-meta">Used for scheduler headers, badges, and calendar cards.</div>
+          </div>
           <div class="color-input-row">
             <input name="color" type="color" value="${escapeHtml(teamMember?.color || '#5b7cff')}" />
             <input name="colorText" value="${escapeHtml(teamMember?.color || '#5b7cff')}" />
+            <span class="settings-employee-avatar is-large" id="team-member-color-preview" style="background:${escapeHtml(teamMember?.color || '#5b7cff')}">${escapeHtml(teamMember?.initials || 'TM')}</span>
           </div>
-        </label>
+        </section>
         <div id="team-member-status"></div>
         <div class="modal-actions split-actions">
           <div class="inline-actions">
@@ -1858,15 +1988,25 @@ function openTeamMemberModal({ mode, teamMember = null }) {
   const form = document.getElementById('team-member-form');
   const colorPicker = form.querySelector('[name="color"]');
   const colorText = form.querySelector('[name="colorText"]');
+  const preview = document.getElementById('team-member-color-preview');
+
+  const syncPreview = () => {
+    preview.style.background = colorPicker.value;
+    preview.textContent = deriveInitials(form.querySelector('[name="displayName"]').value || teamMember?.displayName || 'TM');
+  };
 
   colorPicker.addEventListener('input', () => {
     colorText.value = colorPicker.value;
+    syncPreview();
   });
   colorText.addEventListener('input', () => {
     if (/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(colorText.value)) {
       colorPicker.value = colorText.value;
+      syncPreview();
     }
   });
+  form.querySelector('[name="displayName"]').addEventListener('input', syncPreview);
+  syncPreview();
 
   document.getElementById('close-modal-button').addEventListener('click', closeModal);
   form.addEventListener('submit', async (event) => {
@@ -1876,6 +2016,7 @@ function openTeamMemberModal({ mode, teamMember = null }) {
       const payload = {
         displayName: data.get('displayName'),
         color: data.get('colorText'),
+        activeOnSchedule: data.get('activeOnSchedule') !== 'false',
       };
       const saved = mode === 'create'
         ? await api.createTeamMember(payload)
@@ -2247,7 +2388,7 @@ function compareJobs(left, right) {
 
 function renderDayEventCard(job) {
   return `
-    <a class="calendar-event ${!job.assigneeTeamMemberId ? 'is-unassigned' : ''}" ${colorStyleAttr(job.assignmentColor, '--team-color')} href="${buildJobUrl(job.id, location.pathname, location.search)}">
+    <a class="calendar-event draggable-job ${!job.assigneeTeamMemberId ? 'is-unassigned' : ''}" draggable="true" data-calendar-job-id="${job.id}" ${colorStyleAttr(job.assignmentColor, '--team-color')} href="${buildJobUrl(job.id, location.pathname, location.search)}">
       <div class="calendar-event-time">${escapeHtml(formatTime(job.scheduledStartAt))} to ${escapeHtml(formatTime(job.scheduledEndAt))}</div>
       <div class="calendar-event-title">${escapeHtml(job.titleOrServiceSummary)}</div>
       <div class="calendar-event-meta">${escapeHtml(job.customer?.displayName || 'Unknown customer')}</div>
@@ -2273,6 +2414,11 @@ function formatHourLabel(hour) {
 function colorStyleAttr(color, variableName = '--team-color') {
   const safeColor = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(String(color || '')) ? color : '#5b7cff';
   return `style="${variableName}:${safeColor}"`;
+}
+
+function deriveInitials(displayName) {
+  const parts = String(displayName || '').trim().split(/\s+/).filter(Boolean).slice(0, 2);
+  return (parts.map((part) => part[0]?.toUpperCase() || '').join('') || 'TM').slice(0, 2);
 }
 
 function showTransientPageNotice(message, tone = 'info') {
