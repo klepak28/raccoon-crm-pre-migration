@@ -7,8 +7,9 @@ export function isIsoDateTime(value) {
 }
 
 export function intersectsDay(startAt, endAt, day) {
-  const dayStart = new Date(`${day}T00:00:00.000Z`).getTime();
-  const dayEnd = new Date(`${day}T23:59:59.999Z`).getTime();
+  const [year, month, date] = day.split('-').map(Number);
+  const dayStart = new Date(year, month - 1, date, 0, 0, 0, 0).getTime();
+  const dayEnd = new Date(year, month - 1, date, 23, 59, 59, 999).getTime();
   const start = new Date(startAt).getTime();
   const end = new Date(endAt).getTime();
   return start <= dayEnd && end >= dayStart;

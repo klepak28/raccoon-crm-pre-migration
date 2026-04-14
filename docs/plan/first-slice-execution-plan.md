@@ -321,6 +321,7 @@ Deliver the smallest reviewable implementation that supports:
 - listCustomers(filters?) minimal or none
 - getCustomer(customerId)
 - updateCustomerBasic(customerId, input)
+  - PATCH semantics in V1: omitted fields and subrecords are preserved
 
 ### Team-member service
 - listActiveTeamMembers()
@@ -341,6 +342,7 @@ Deliver the smallest reviewable implementation that supports:
     - `Unassigned`
     - active team members
   - returns scheduled jobs intersecting the selected day
+  - selected-day interpretation uses the same local runtime day basis as V1 UI input and display
 
 ### Important service invariants
 - a job cannot be both unscheduled and present in the day schedule payload

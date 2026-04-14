@@ -37,6 +37,31 @@ export function validateCustomerInput(input, { partial = false } = {}) {
     }
   }
 
+  if (partial) {
+    const patch = {};
+
+    assignIfPresent(patch, input, 'firstName', firstName);
+    assignIfPresent(patch, input, 'lastName', lastName);
+    assignIfPresent(patch, input, 'displayName', displayName);
+    assignIfPresent(patch, input, 'companyName', companyName);
+    assignIfPresent(patch, input, 'role', role);
+    assignIfPresent(patch, input, 'customerType', customerType);
+    if ('subcontractor' in input || 'customerType' in input) {
+      patch.subcontractor = customerType === 'Business' ? Boolean(input.subcontractor) : false;
+    }
+    if ('doNotService' in input) patch.doNotService = Boolean(input.doNotService);
+    if ('sendNotifications' in input) patch.sendNotifications = input.sendNotifications !== false;
+    assignIfPresent(patch, input, 'customerNotes', asTrimmedString(input.customerNotes));
+    assignIfPresent(patch, input, 'leadSource', asTrimmedString(input.leadSource));
+    assignIfPresent(patch, input, 'referredBy', asTrimmedString(input.referredBy));
+    if ('tags' in input) patch.tags = tags;
+    if (hasAnyPhoneInput(input)) patch.phones = phones;
+    if (hasAnyEmailInput(input)) patch.emails = emails;
+    if (hasAnyAddressInput(input)) patch.addresses = addresses;
+
+    return patch;
+  }
+
   const normalized = {
     firstName,
     lastName,
@@ -64,6 +89,24 @@ export function validateCustomerInput(input, { partial = false } = {}) {
 function deriveDisplayName({ firstName, lastName, companyName }) {
   const person = [firstName, lastName].filter(Boolean).join(' ').trim();
   return person || firstName || companyName || '';
+}
+
+function assignIfPresent(target, source, key, value) {
+  if (key in source || (key === 'companyName' && 'company' in source)) {
+    target[key] = value;
+  }
+}
+
+function hasAnyPhoneInput(input) {
+  return 'mobilePhone' in input || 'homePhone' in input || 'workPhone' in input || 'additionalPhones' in input;
+}
+
+function hasAnyEmailInput(input) {
+  return 'email' in input || 'additionalEmails' in input;
+}
+
+function hasAnyAddressInput(input) {
+  return 'street' in input || 'unit' in input || 'city' in input || 'state' in input || 'zip' in input || 'addressNotes' in input || 'additionalAddresses' in input;
 }
 
 function normalizeEmails(input) {

@@ -96,6 +96,7 @@ Use layered testing so the slice stays small and reviewable:
 - customer detail returns job in jobs list after create
 - customer jobs list reflects scheduled date when job is scheduled
 - customer jobs list remains present after unschedule, with scheduled field cleared or equivalent
+- customer partial PATCH preserves omitted contact/address subrecords
 
 ### Validation integrations
 - do-not-service customer can still exist but scheduling action is blocked
@@ -106,6 +107,7 @@ Use layered testing so the slice stays small and reviewable:
 - job detail schedule summary matches day-schedule query for the same job
 - job detail assignment summary matches day-schedule lane placement
 - unscheduled job absent from schedule query but present in customer/job reads
+- near-midnight schedule created from UI-style local datetime input matches selected-day schedule results
 
 ---
 
