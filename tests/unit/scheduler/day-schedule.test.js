@@ -4,6 +4,10 @@ import { createContext } from '../../../src/bootstrap/create-context.js';
 import { validateCustomerInput } from '../../../src/validation/customers/customer-input.validator.js';
 import { validateJobInput } from '../../../src/validation/jobs/job-input.validator.js';
 
+function toUiIso(localDateTime) {
+  return new Date(localDateTime).toISOString();
+}
+
 function createCustomer(context) {
   return context.services.customers.createCustomer(validateCustomerInput({
     displayName: 'Schedule Customer',
@@ -52,4 +56,24 @@ test('moves job into assigned lane after assignment', () => {
   const lane = daySchedule.lanes.find((item) => item.id === 'tm_0001');
   assert.equal(lane.jobs.length, 1);
   assert.equal(lane.jobs[0].id, job.id);
+});
+
+test('uses the same local-day interpretation as UI scheduling input near midnight', () => {
+  const context = createContext();
+  const customer = createCustomer(context);
+  const job = context.services.jobs.createOneTimeJob(customer.id, validateJobInput({
+    titleOrServiceSummary: 'Near midnight local job',
+    customerAddressId: customer.addresses[0].id,
+  }));
+
+  context.services.jobs.scheduleJob(job.id, {
+    scheduledStartAt: toUiIso('2026-04-13T23:30'),
+    scheduledEndAt: toUiIso('2026-04-14T00:30'),
+  });
+
+  const selectedDay = context.services.scheduler.getDaySchedule('2026-04-13');
+  const nextDay = context.services.scheduler.getDaySchedule('2026-04-14');
+
+  assert.equal(selectedDay.lanes[0].jobs.some((item) => item.id === job.id), true);
+  assert.equal(nextDay.lanes[0].jobs.some((item) => item.id === job.id), true);
 });

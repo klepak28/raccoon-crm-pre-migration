@@ -68,6 +68,99 @@ test('customer -> job -> schedule -> assign -> day schedule flow works', async (
   });
 });
 
+test('customer PATCH preserves omitted subrecords', async () => {
+  const context = createContext();
+  const app = createApp({ staticRoot, context });
+
+  await withServer(app, async (baseUrl) => {
+    const customerResponse = await fetch(`${baseUrl}/api/customers`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        displayName: 'Patch Flow',
+        customerType: 'Homeowner',
+        mobilePhone: '555-222-3333',
+        email: 'patch-flow@example.com',
+        street: '1 Main',
+        city: 'Austin',
+        state: 'TX',
+        zip: '73301',
+        tags: ['blue'],
+      }),
+    });
+    const customerPayload = await customerResponse.json();
+    const customerId = customerPayload.item.id;
+
+    const patchResponse = await fetch(`${baseUrl}/api/customers/${customerId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ displayName: 'Patch Flow Updated' }),
+    });
+    assert.equal(patchResponse.status, 200);
+
+    const detailResponse = await fetch(`${baseUrl}/api/customers/${customerId}`);
+    const detailPayload = await detailResponse.json();
+
+    assert.equal(detailPayload.item.displayName, 'Patch Flow Updated');
+    assert.equal(detailPayload.item.phones.length, 1);
+    assert.equal(detailPayload.item.emails.length, 1);
+    assert.equal(detailPayload.item.addresses.length, 1);
+    assert.deepEqual(detailPayload.item.tags, ['blue']);
+  });
+});
+
+test('schedule day query stays consistent with UI local datetime input near midnight', async () => {
+  const context = createContext();
+  const app = createApp({ staticRoot, context });
+
+  await withServer(app, async (baseUrl) => {
+    const customerResponse = await fetch(`${baseUrl}/api/customers`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        displayName: 'Near Midnight Flow',
+        customerType: 'Homeowner',
+        street: '1 Main',
+        city: 'Austin',
+        state: 'TX',
+        zip: '73301',
+      }),
+    });
+    const customerPayload = await customerResponse.json();
+    const customerId = customerPayload.item.id;
+    const addressId = customerPayload.item.addresses[0].id;
+
+    const jobResponse = await fetch(`${baseUrl}/api/customers/${customerId}/jobs`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        titleOrServiceSummary: 'Midnight repair',
+        customerAddressId: addressId,
+      }),
+    });
+    const jobPayload = await jobResponse.json();
+    const jobId = jobPayload.item.id;
+
+    const scheduledStartAt = new Date('2026-04-13T23:30').toISOString();
+    const scheduledEndAt = new Date('2026-04-14T00:30').toISOString();
+
+    const scheduleResponse = await fetch(`${baseUrl}/api/jobs/${jobId}/schedule`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ scheduledStartAt, scheduledEndAt }),
+    });
+    assert.equal(scheduleResponse.status, 200);
+
+    const day13Response = await fetch(`${baseUrl}/api/schedule/day?date=2026-04-13`);
+    const day13Payload = await day13Response.json();
+    assert.equal(day13Payload.item.lanes[0].jobs.some((item) => item.id === jobId), true);
+
+    const detailResponse = await fetch(`${baseUrl}/api/jobs/${jobId}`);
+    const detailPayload = await detailResponse.json();
+    assert.match(detailPayload.item.scheduledStartAt, /^2026-04-14T|^2026-04-13T/);
+  });
+});
+
 test('unsupported recurrence and invoice fields are rejected explicitly', async () => {
   const context = createContext();
   const app = createApp({ staticRoot, context });
