@@ -5,7 +5,7 @@ import { assertRequired, asTrimmedString, normalizeTags } from '../../lib/valida
 const VALID_FREQUENCIES = ['daily', 'weekly', 'monthly', 'yearly'];
 const VALID_END_MODES = ['never', 'after_n_occurrences', 'on_date'];
 const VALID_DAYS_OF_WEEK = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-const VALID_ORDINALS = ['first', 'second', 'third', 'fourth', 'last'];
+const VALID_ORDINALS = ['first', 'second', 'third', 'fourth', 'fifth', 'last'];
 const VALID_MONTHS = [
   'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
   'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',

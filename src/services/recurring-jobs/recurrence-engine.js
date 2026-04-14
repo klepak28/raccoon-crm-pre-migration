@@ -5,6 +5,7 @@ const ORDINAL_MAP = {
   second: 1,
   third: 2,
   fourth: 3,
+  fifth: 4,
   last: -1,
 };
 

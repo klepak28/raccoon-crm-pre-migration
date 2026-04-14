@@ -194,3 +194,99 @@ test('delete scopes distinguish one occurrence from truncating the remaining ser
   assert.deepEqual(active.map((item) => item.occurrenceIndex), [1]);
   assert.equal(context.services.recurringJobs.getSeriesForJob(occurrences[0].id).recurrenceEnabled, false);
 });
+
+test('monthly 31st pattern skips months without a 31st', () => {
+  const context = createContext();
+  const customer = createCustomer(context);
+  const scheduledJob = context.services.jobs.createOneTimeJob(customer.id, validateJobInput({
+    titleOrServiceSummary: 'Month-end service',
+    customerAddressId: customer.addresses[0].id,
+  }));
+
+  context.services.jobs.scheduleJob(scheduledJob.id, {
+    scheduledStartAt: '2026-01-31T14:00:00.000Z',
+    scheduledEndAt: '2026-01-31T15:00:00.000Z',
+  });
+
+  const { series } = context.services.recurringJobs.createRecurringSeries(
+    scheduledJob.id,
+    validateRecurrenceInput({
+      recurrenceFrequency: 'monthly',
+      recurrenceInterval: 1,
+      recurrenceDayOfMonth: 31,
+      recurrenceEndMode: 'after_n_occurrences',
+      recurrenceOccurrenceCount: 5,
+    }),
+  );
+
+  const starts = context.services.recurringJobs.getSeriesDetail(series.id).occurrences.map((item) => item.scheduledStartAt);
+  assert.deepEqual(starts.map((value) => value.slice(0, 10)), [
+    '2026-01-31',
+    '2026-03-31',
+    '2026-05-31',
+    '2026-07-31',
+    '2026-08-31',
+  ]);
+});
+
+test('monthly fifth weekday pattern skips months without that weekday position', () => {
+  const context = createContext();
+  const customer = createCustomer(context);
+  const scheduledJob = context.services.jobs.createOneTimeJob(customer.id, validateJobInput({
+    titleOrServiceSummary: 'Fifth weekday service',
+    customerAddressId: customer.addresses[0].id,
+  }));
+
+  context.services.jobs.scheduleJob(scheduledJob.id, {
+    scheduledStartAt: '2026-01-29T09:00:00.000Z',
+    scheduledEndAt: '2026-01-29T10:00:00.000Z',
+  });
+
+  const { series } = context.services.recurringJobs.createRecurringSeries(
+    scheduledJob.id,
+    validateRecurrenceInput({
+      recurrenceFrequency: 'monthly',
+      recurrenceInterval: 1,
+      recurrenceOrdinal: 'fifth',
+      recurrenceDayOfWeek: ['THU'],
+      recurrenceEndMode: 'after_n_occurrences',
+      recurrenceOccurrenceCount: 4,
+    }),
+  );
+
+  const starts = context.services.recurringJobs.getSeriesDetail(series.id).occurrences.map((item) => item.scheduledStartAt);
+  assert.deepEqual(starts.map((value) => value.slice(0, 10)), [
+    '2026-01-29',
+    '2026-04-30',
+    '2026-07-30',
+    '2026-10-29',
+  ]);
+});
+
+test('moving recurrence end date backward truncates future occurrences after the new boundary', () => {
+  const context = createContext();
+  const customer = createCustomer(context);
+  const scheduledJob = createScheduledJob(context, customer);
+  const { series } = context.services.recurringJobs.createRecurringSeries(scheduledJob.id, createWeeklyRule({ recurrenceOccurrenceCount: 6 }));
+  const occurrences = context.services.recurringJobs.getSeriesDetail(series.id).occurrences;
+  const pivot = occurrences[1];
+
+  context.services.recurringJobs.editThisAndFutureOccurrences(
+    pivot.id,
+    {},
+    validateRecurrenceInput({
+      recurrenceFrequency: 'weekly',
+      recurrenceInterval: 1,
+      recurrenceDayOfWeek: ['FRI'],
+      recurrenceEndMode: 'on_date',
+      recurrenceEndDate: '2026-05-01',
+    }),
+  );
+
+  const active = context.services.recurringJobs.getSeriesDetail(series.id).occurrences;
+  assert.deepEqual(active.map((item) => item.scheduledStartAt), [
+    '2026-04-17T14:00:00.000Z',
+    '2026-04-24T14:00:00.000Z',
+    '2026-05-01T14:00:00.000Z',
+  ]);
+});

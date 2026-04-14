@@ -1099,6 +1099,7 @@ async function renderJobSchedulePage(jobId) {
                       <option value="second">Second</option>
                       <option value="third">Third</option>
                       <option value="fourth">Fourth</option>
+                      <option value="fifth">Fifth</option>
                       <option value="last">Last</option>
                     </select>
                   </label>
@@ -2719,6 +2720,7 @@ async function renderNewRecurringJobPage() {
                     <option value="second">Second</option>
                     <option value="third">Third</option>
                     <option value="fourth">Fourth</option>
+                    <option value="fifth">Fifth</option>
                     <option value="last">Last</option>
                   </select>
                 </label>
@@ -3045,15 +3047,15 @@ function openRecurringEditScopeModal(job, customer, seriesInfo) {
   document.getElementById('close-modal-button').addEventListener('click', closeModal);
   document.getElementById('edit-scope-this').addEventListener('click', () => {
     closeModal();
-    openEditJobModalWithScope(job, customer, 'this');
+    openEditJobModalWithScope(job, customer, seriesInfo, 'this');
   });
   document.getElementById('edit-scope-future').addEventListener('click', () => {
     closeModal();
-    openEditJobModalWithScope(job, customer, 'this_and_future');
+    openEditJobModalWithScope(job, customer, seriesInfo, 'this_and_future');
   });
 }
 
-function openEditJobModalWithScope(job, customer, scope) {
+function openEditJobModalWithScope(job, customer, seriesInfo, scope) {
   openModal({
     title: `Edit ${job.jobNumber} — ${scope === 'this' ? 'Only this job' : 'This and future jobs'}`,
     body: `
@@ -3102,6 +3104,82 @@ function openEditJobModalWithScope(job, customer, scope) {
             ${getActiveTeamMembers().map((m) => `<option value="${m.id}" ${job.assigneeTeamMemberId === m.id ? 'selected' : ''}>${escapeHtml(m.displayName)}</option>`).join('')}
           </select>
         </label>
+        ${scope === 'this_and_future' ? `
+        <div class="stack-gap recurring-inline-editor">
+          <div class="label">Repeat rule</div>
+          <select name="recurrencePreset" id="recurrence-preset">
+            <option value="none">Does not repeat</option>
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+            <option value="yearly">Yearly</option>
+            <option value="custom">Custom</option>
+          </select>
+          <div id="recurrence-custom-section" hidden>
+            <div class="form-grid two-columns">
+              <label>
+                <span>Repeats every</span>
+                <input name="recurrenceInterval" type="number" value="1" min="1" max="999" />
+              </label>
+              <label>
+                <span>Unit</span>
+                <select name="recurrenceFrequency">
+                  <option value="daily">Day</option>
+                  <option value="weekly">Week</option>
+                  <option value="monthly">Month</option>
+                  <option value="yearly">Year</option>
+                </select>
+              </label>
+            </div>
+            <div id="recurrence-weekday-chips" class="chip-row" hidden>
+              <span class="label">Repeats on</span>
+              ${['SUN','MON','TUE','WED','THU','FRI','SAT'].map((d) => `<label class="chip-toggle"><input type="checkbox" name="recurrenceDayOfWeek" value="${d}" /><span>${d}</span></label>`).join('')}
+            </div>
+            <div id="recurrence-monthly-mode" hidden>
+              <label>
+                <span>Monthly mode</span>
+                <select name="monthlyMode">
+                  <option value="dayOfMonth">Day of month</option>
+                  <option value="ordinal">Ordinal weekday</option>
+                </select>
+              </label>
+              <div id="recurrence-day-of-month-section">
+                <label>
+                  <span>Day of month</span>
+                  <input name="recurrenceDayOfMonth" type="number" min="1" max="31" value="1" />
+                </label>
+              </div>
+              <div id="recurrence-ordinal-section" hidden>
+                <div class="form-grid two-columns">
+                  <label>
+                    <span>Ordinal</span>
+                    <select name="recurrenceOrdinal">
+                      <option value="first">First</option>
+                      <option value="second">Second</option>
+                      <option value="third">Third</option>
+                      <option value="fourth">Fourth</option>
+                      <option value="fifth">Fifth</option>
+                      <option value="last">Last</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Day</span>
+                    <select name="recurrenceOrdinalDay">
+                      ${['SUN','MON','TUE','WED','THU','FRI','SAT'].map((d) => `<option value="${d}">${d}</option>`).join('')}
+                    </select>
+                  </label>
+                </div>
+              </div>
+            </div>
+            <fieldset class="stack-gap-sm">
+              <legend>Ends</legend>
+              <label class="radio-row"><input type="radio" name="recurrenceEndMode" value="never" checked /> Never</label>
+              <label class="radio-row"><input type="radio" name="recurrenceEndMode" value="after_n_occurrences" /> After <input type="number" name="recurrenceOccurrenceCount" value="10" min="1" class="inline-number" /></label>
+              <label class="radio-row"><input type="radio" name="recurrenceEndMode" value="on_date" /> On <input type="date" name="recurrenceEndDate" class="inline-date" /></label>
+            </fieldset>
+          </div>
+        </div>
+        ` : ''}
         <div id="edit-recurring-status"></div>
         <div class="modal-actions">
           <button type="button" class="button button-ghost" id="close-modal-button">Cancel</button>
@@ -3112,6 +3190,10 @@ function openEditJobModalWithScope(job, customer, scope) {
   });
 
   document.getElementById('close-modal-button').addEventListener('click', closeModal);
+  bindRecurrenceControls();
+  if (scope === 'this_and_future' && seriesInfo) {
+    populateRecurrenceForm(document.getElementById('edit-recurring-form'), seriesInfo);
+  }
   document.getElementById('edit-recurring-form').addEventListener('submit', async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
@@ -3139,14 +3221,27 @@ function openEditJobModalWithScope(job, customer, scope) {
         changes.assigneeTeamMemberId = teamMemberId || null;
       }
 
+      let recurrenceRule;
       if (scope === 'this') {
         const start = data.get('scheduledStartAt');
         const end = data.get('scheduledEndAt');
         if (start) changes.scheduledStartAt = toIso(start);
         if (end) changes.scheduledEndAt = toIso(end);
+      } else {
+        const nextRule = buildRecurrencePayload(form);
+        if (!nextRule) {
+          throw new Error('Recurring jobs cannot be switched to does not repeat from this modal. Use delete scope actions if you need to stop future occurrences.');
+        }
+        recurrenceRule = didRecurrenceRuleChange(seriesInfo, nextRule) ? nextRule : undefined;
       }
 
-      await api.editOccurrence(job.id, scope, changes);
+      if (!Object.keys(changes).length && !recurrenceRule) {
+        setFlash('No recurring changes to save.', 'info');
+        closeModal();
+        return;
+      }
+
+      await api.editOccurrence(job.id, scope, changes, recurrenceRule);
       setFlash(scope === 'this' ? 'Occurrence updated.' : 'This and future occurrences updated.', 'success');
       location.reload();
     } catch (error) {
