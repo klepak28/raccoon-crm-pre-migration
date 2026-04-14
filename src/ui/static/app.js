@@ -21,6 +21,7 @@ import {
   formatRangeLabel,
 } from './date-utils.js';
 import { badge, chips, consumeFlash, emptyState, escapeHtml, formatAddress, setFlash, statusMessage } from './ui.js';
+import { buildDayUrl, buildJobUrl, buildSchedulerUrl, getSchedulerContext } from './scheduler-links.js';
 
 const app = document.getElementById('app');
 const state = {
@@ -208,7 +209,7 @@ async function renderCustomersListPage() {
 
 async function renderCustomerDetailPage(customerId) {
   const customer = await api.getCustomer(customerId);
-  const schedulerContext = getSchedulerContext();
+  const schedulerContext = getSchedulerContext(location.search);
   renderShell({
     title: customer.displayName,
     subtitle: `${customer.customerType}${customer.doNotService ? ' • Do not service' : ''}`,
@@ -347,7 +348,7 @@ function renderCustomerJobs(jobs) {
 async function renderJobDetailPage(jobId) {
   const job = await api.getJob(jobId);
   const customer = await api.getCustomer(job.customer.id);
-  const schedulerContext = getSchedulerContext();
+  const schedulerContext = getSchedulerContext(location.search);
   renderShell({
     title: `${job.jobNumber} • ${job.titleOrServiceSummary}`,
     subtitle: `${job.scheduleState === 'scheduled' ? 'Scheduled' : 'Unscheduled'} • ${job.assignee?.displayName || 'Unassigned'}`,
@@ -443,9 +444,12 @@ async function renderSchedulerPage() {
   const params = new URLSearchParams(location.search);
   const view = ['day', 'week', 'month'].includes(params.get('view')) ? params.get('view') : 'day';
   const date = params.get('date') || localToday();
+  const filter = params.get('filter') || '';
   const range = viewRange(view, date);
   const schedule = await api.getScheduleRange(range.startDate, range.endDate);
+  const filteredSchedule = filterSchedule(schedule, filter);
   const rangeLabel = formatRangeLabel(view, date);
+  const summary = summarizeSchedule(filteredSchedule, range.startDate, range.endDate);
 
   renderShell({
     title: 'Scheduler',
@@ -455,19 +459,30 @@ async function renderSchedulerPage() {
     actions: `
       <div class="scheduler-actions">
         <div class="view-switcher">
-          ${schedulerViewButton('day', view, date)}
-          ${schedulerViewButton('week', view, date)}
-          ${schedulerViewButton('month', view, date)}
+          ${schedulerViewButton('day', view, date, filter)}
+          ${schedulerViewButton('week', view, date, filter)}
+          ${schedulerViewButton('month', view, date, filter)}
         </div>
       </div>
     `,
     content: `
-      <section class="surface-card stack-gap-lg">
+      <section class="surface-card stack-gap-lg scheduler-surface">
+        <div class="scheduler-context-bar">
+          <div class="context-primary">
+            <div class="range-pill range-pill-strong">${escapeHtml(rangeLabel)}</div>
+            <div class="context-meta">Focused ${escapeHtml(shortDayLabel(date))} in ${escapeHtml(capitalize(view))} view</div>
+          </div>
+          <div class="context-stats">
+            <div class="context-stat"><span>Jobs in range</span><strong>${summary.totalJobs}</strong></div>
+            <div class="context-stat"><span>Unassigned</span><strong>${summary.unassignedJobs}</strong></div>
+            <div class="context-stat"><span>Active days</span><strong>${summary.daysWithJobs}</strong></div>
+          </div>
+        </div>
         <div class="toolbar toolbar-between scheduler-toolbar">
           <div class="inline-actions">
-            <a class="button" href="${buildSchedulerUrl({ view, date: stepAnchorDay(view, date, -1) })}">Previous</a>
-            <a class="button" href="${buildSchedulerUrl({ view, date: localToday() })}">Today</a>
-            <a class="button" href="${buildSchedulerUrl({ view, date: stepAnchorDay(view, date, 1) })}">Next</a>
+            <a class="button" href="${buildSchedulerUrl({ view, date: stepAnchorDay(view, date, -1), filter })}">Previous</a>
+            <a class="button" href="${buildSchedulerUrl({ view, date: localToday(), filter })}">Today</a>
+            <a class="button" href="${buildSchedulerUrl({ view, date: stepAnchorDay(view, date, 1), filter })}">Next</a>
           </div>
           <form id="scheduler-jump-form" class="inline-actions compact-form">
             <label>
@@ -475,11 +490,43 @@ async function renderSchedulerPage() {
               <input type="date" name="date" value="${escapeHtml(date)}" />
             </label>
             <input type="hidden" name="view" value="${escapeHtml(view)}" />
+            <input type="hidden" name="filter" value="${escapeHtml(filter)}" />
             <button class="button button-primary" type="submit">Go</button>
           </form>
         </div>
-        <div class="range-pill">${escapeHtml(rangeLabel)}</div>
-        <div id="scheduler-region">${renderSchedulerView({ view, date, schedule })}</div>
+        <div class="scheduler-layout">
+          <aside class="scheduler-rail">
+            <div class="rail-card stack-gap">
+              <h2 class="section-title">Scheduler focus</h2>
+              <div class="rail-focus-date">${escapeHtml(formatRangeLabel('day', date))}</div>
+              <div class="rail-copy">Drill into day view, scan the range, or filter by customer, service, or tag.</div>
+              <a class="button button-primary" href="${buildDayUrl(date, filter)}">Open focused day</a>
+            </div>
+            <div class="rail-card stack-gap">
+              <h2 class="section-title">Filter by name or tag</h2>
+              <form id="scheduler-filter-form" class="stack-gap compact-form">
+                <label>
+                  <span class="label-inline">Filter</span>
+                  <input name="filter" value="${escapeHtml(filter)}" placeholder="Customer, service, or tag" />
+                </label>
+                <input type="hidden" name="view" value="${escapeHtml(view)}" />
+                <input type="hidden" name="date" value="${escapeHtml(date)}" />
+                <div class="inline-actions">
+                  <button class="button button-primary" type="submit">Apply</button>
+                  ${filter ? `<a class="button button-ghost" href="${buildSchedulerUrl({ view, date })}">Clear</a>` : ''}
+                </div>
+              </form>
+            </div>
+            <div class="rail-card stack-gap">
+              <h2 class="section-title">Range guide</h2>
+              ${renderRangeGuide(view, date, filteredSchedule, filter)}
+            </div>
+          </aside>
+          <div class="scheduler-main">
+            ${summary.totalJobs === 0 ? statusMessage(filter ? 'No jobs match the current filter in this range.' : 'No jobs are scheduled in this range yet.', 'warning') : ''}
+            <div id="scheduler-region">${renderSchedulerView({ view, date, schedule: filteredSchedule, filter })}</div>
+          </div>
+        </div>
       </section>
     `,
   });
@@ -487,23 +534,29 @@ async function renderSchedulerPage() {
   document.getElementById('scheduler-jump-form').addEventListener('submit', (event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    location.href = buildSchedulerUrl({ view: form.get('view'), date: form.get('date') });
+    location.href = buildSchedulerUrl({ view: form.get('view'), date: form.get('date'), filter: form.get('filter') });
+  });
+
+  document.getElementById('scheduler-filter-form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    location.href = buildSchedulerUrl({ view: form.get('view'), date: form.get('date'), filter: form.get('filter') });
   });
 
   bindSchedulerQuickActions();
 }
 
-function renderSchedulerView({ view, date, schedule }) {
+function renderSchedulerView({ view, date, schedule, filter }) {
   if (view === 'day') {
-    return renderDaySchedulerView(date, schedule);
+    return renderDaySchedulerView(date, schedule, filter);
   }
   if (view === 'week') {
-    return renderWeekSchedulerView(date, schedule);
+    return renderWeekSchedulerView(date, schedule, filter);
   }
-  return renderMonthSchedulerView(date, schedule);
+  return renderMonthSchedulerView(date, schedule, filter);
 }
 
-function renderDaySchedulerView(date, schedule) {
+function renderDaySchedulerView(date, schedule, filter) {
   const jobsByLane = new Map(schedule.lanes.map((lane) => [lane.id, []]));
   for (const job of schedule.jobs) {
     if (jobDayKeys(job, date, date).includes(date)) {
@@ -514,25 +567,32 @@ function renderDaySchedulerView(date, schedule) {
 
   return `
     <div class="lane-board">
-      ${schedule.lanes.map((lane) => `
-        <section class="lane-column ${lane.id === 'unassigned' ? 'lane-column-unassigned' : ''}">
-          <div class="lane-header">
-            <div>
-              <h3>${escapeHtml(lane.label)}</h3>
-              <p>${lane.id === 'unassigned' ? 'Visible bucket for scheduled work with no assignee yet.' : 'Assigned lane for scheduled work.'}</p>
+      ${schedule.lanes.map((lane) => {
+        const laneJobs = (jobsByLane.get(lane.id) || []).sort(compareJobs);
+        return `
+          <section class="lane-column ${lane.id === 'unassigned' ? 'lane-column-unassigned' : ''}">
+            <div class="lane-header">
+              <div>
+                <h3>${escapeHtml(lane.label)}</h3>
+                <p>${lane.id === 'unassigned' ? 'Scheduled work waiting for team assignment.' : 'Scheduled work assigned to this team member.'}</p>
+              </div>
+              ${lane.initials ? `<span class="lane-avatar">${escapeHtml(lane.initials)}</span>` : badge('Unassigned lane', 'warning')}
             </div>
-            ${lane.initials ? `<span class="lane-avatar">${escapeHtml(lane.initials)}</span>` : badge('Needs team', 'warning')}
-          </div>
-          <div class="lane-body">
-            ${(jobsByLane.get(lane.id) || []).length ? (jobsByLane.get(lane.id) || []).sort(compareJobs).map((job) => schedulerCard(job)).join('') : `<div class="empty-lane">No scheduled jobs</div>`}
-          </div>
-        </section>
-      `).join('')}
+            <div class="lane-summary">
+              <span>${laneJobs.length} job${laneJobs.length === 1 ? '' : 's'}</span>
+              ${lane.id === 'unassigned' ? '<span>Assign from the card or job page</span>' : '<span>Open any job for full detail</span>'}
+            </div>
+            <div class="lane-body">
+              ${laneJobs.length ? laneJobs.map((job) => schedulerCard(job, { view: 'day', filter })).join('') : `<div class="empty-lane">No scheduled jobs in this lane for the focused day.</div>`}
+            </div>
+          </section>
+        `;
+      }).join('')}
     </div>
   `;
 }
 
-function renderWeekSchedulerView(date, schedule) {
+function renderWeekSchedulerView(date, schedule, filter) {
   const start = startOfWeek(date);
   const end = addDays(start, 6);
   const days = listDays(start, end);
@@ -540,22 +600,34 @@ function renderWeekSchedulerView(date, schedule) {
 
   return `
     <div class="week-grid">
-      ${days.map((day) => `
-        <section class="week-column ${day === formatDayKey(parseDayKey(localToday())) ? 'is-today' : ''}">
-          <div class="week-header">
-            <div class="week-weekday">${escapeHtml(weekdayLabel(day))}</div>
-            <div class="week-date">${escapeHtml(shortDayLabel(day))}</div>
-          </div>
-          <div class="week-body">
-            ${(jobsByDay.get(day) || []).length ? (jobsByDay.get(day) || []).sort(compareJobs).map((job) => schedulerCard(job, { compact: true })).join('') : `<div class="empty-lane">No jobs</div>`}
-          </div>
-        </section>
-      `).join('')}
+      ${days.map((day) => {
+        const dayJobs = (jobsByDay.get(day) || []).sort(compareJobs);
+        const daySummary = summarizeDayJobs(dayJobs);
+        return `
+          <section class="week-column ${day === localToday() ? 'is-today' : ''} ${day === date ? 'is-focused-day' : ''}">
+            <div class="week-header week-header-strong">
+              <div>
+                <div class="week-weekday">${escapeHtml(weekdayLabel(day))}</div>
+                <div class="week-date">${escapeHtml(shortDayLabel(day))}</div>
+              </div>
+              <a class="button button-small button-ghost" href="${buildDayUrl(day, filter)}">Open day</a>
+            </div>
+            <div class="week-summary-row">
+              <span>${daySummary.total} job${daySummary.total === 1 ? '' : 's'}</span>
+              <span>${daySummary.unassigned} unassigned</span>
+            </div>
+            <div class="week-body">
+              ${dayJobs.length ? dayJobs.slice(0, 4).map((job) => schedulerCard(job, { compact: true, view: 'week', filter })).join('') : `<div class="empty-lane">No jobs on this day</div>`}
+              ${dayJobs.length > 4 ? `<a class="more-link" href="${buildDayUrl(day, filter)}">Open day to view ${dayJobs.length - 4} more</a>` : ''}
+            </div>
+          </section>
+        `;
+      }).join('')}
     </div>
   `;
 }
 
-function renderMonthSchedulerView(date, schedule) {
+function renderMonthSchedulerView(date, schedule, filter) {
   const start = monthGridStart(date);
   const end = monthGridEnd(date);
   const days = listDays(start, end);
@@ -569,21 +641,79 @@ function renderMonthSchedulerView(date, schedule) {
     <div class="month-grid">
       ${days.map((day) => {
         const dayJobs = (jobsByDay.get(day) || []).sort(compareJobs);
+        const daySummary = summarizeDayJobs(dayJobs);
         return `
-          <section class="month-cell ${day.startsWith(activeMonth) ? '' : 'is-muted-month'} ${day === localToday() ? 'is-today' : ''}">
+          <section class="month-cell ${day.startsWith(activeMonth) ? '' : 'is-muted-month'} ${day === localToday() ? 'is-today' : ''} ${day === date ? 'is-focused-day' : ''}">
             <div class="month-day-top">
-              <strong>${parseDayKey(day).getDate()}</strong>
-              <span>${dayJobs.length ? `${dayJobs.length} job${dayJobs.length === 1 ? '' : 's'}` : ''}</span>
+              <a class="month-day-link" href="${buildDayUrl(day, filter)}"><strong>${parseDayKey(day).getDate()}</strong></a>
+              <span>${daySummary.total ? `${daySummary.total} job${daySummary.total === 1 ? '' : 's'}` : 'Open day'}</span>
+            </div>
+            <div class="month-day-summary ${daySummary.unassigned ? 'has-unassigned' : ''}">
+              <span>${daySummary.unassigned ? `${daySummary.unassigned} unassigned` : 'All assigned or empty'}</span>
             </div>
             <div class="month-day-body">
-              ${dayJobs.length ? dayJobs.slice(0, 3).map((job) => schedulerCard(job, { compact: true, month: true })).join('') : '<div class="empty-lane">No jobs</div>'}
-              ${dayJobs.length > 3 ? `<div class="more-count">+${dayJobs.length - 3} more jobs</div>` : ''}
+              ${dayJobs.length ? dayJobs.slice(0, 2).map((job) => schedulerCard(job, { compact: true, month: true, filter })).join('') : '<div class="empty-lane">No jobs</div>'}
+              ${dayJobs.length > 2 ? `<a class="more-link" href="${buildDayUrl(day, filter)}">Open day to view ${dayJobs.length - 2} more</a>` : ''}
             </div>
           </section>
         `;
       }).join('')}
     </div>
   `;
+}
+
+function renderRangeGuide(view, date, schedule, filter = '') {
+  const range = viewRange(view, date);
+  const days = listDays(range.startDate, range.endDate);
+  const jobsByDay = groupJobsByDay(schedule.jobs, range.startDate, range.endDate);
+  return `
+    <div class="range-guide-list">
+      ${days.slice(0, view === 'month' ? 14 : days.length).map((day) => {
+        const dayJobs = jobsByDay.get(day) || [];
+        return `
+          <a class="range-guide-row ${day === date ? 'is-active' : ''}" href="${buildDayUrl(day, filter)}">
+            <span>${escapeHtml(shortDayLabel(day))}</span>
+            <strong>${dayJobs.length}</strong>
+          </a>
+        `;
+      }).join('')}
+      ${view === 'month' && days.length > 14 ? '<div class="table-meta">Open any month cell to drill into the day.</div>' : ''}
+    </div>
+  `;
+}
+
+function filterSchedule(schedule, rawFilter) {
+  const filter = String(rawFilter || '').trim().toLowerCase();
+  if (!filter) return schedule;
+  const jobs = schedule.jobs.filter((job) => [
+    job.jobNumber,
+    job.titleOrServiceSummary,
+    job.customer?.displayName,
+    job.assignmentLabel,
+    ...(job.customer?.tags || []),
+  ].filter(Boolean).join(' ').toLowerCase().includes(filter));
+  return { ...schedule, jobs };
+}
+
+function summarizeSchedule(schedule, start, end) {
+  const activeDays = new Set();
+  for (const job of schedule.jobs) {
+    for (const day of jobDayKeys(job, start, end)) {
+      activeDays.add(day);
+    }
+  }
+  return {
+    totalJobs: schedule.jobs.length,
+    unassignedJobs: schedule.jobs.filter((job) => !job.assigneeTeamMemberId).length,
+    daysWithJobs: activeDays.size,
+  };
+}
+
+function summarizeDayJobs(jobs) {
+  return {
+    total: jobs.length,
+    unassigned: jobs.filter((job) => !job.assigneeTeamMemberId).length,
+  };
 }
 
 function groupJobsByDay(jobs, start, end) {
@@ -601,22 +731,31 @@ function groupJobsByDay(jobs, start, end) {
 
 function schedulerCard(job, options = {}) {
   return `
-    <article class="scheduler-card ${options.compact ? 'compact' : ''}">
+    <article class="scheduler-card ${options.compact ? 'compact' : ''} ${!job.assigneeTeamMemberId ? 'scheduler-card-unassigned' : ''}">
       <div class="scheduler-card-top">
-        <a class="scheduler-card-link" href="${buildJobUrl(job.id)}"><strong>${escapeHtml(job.jobNumber)}</strong></a>
-        ${job.assigneeTeamMemberId ? badge(job.assignmentLabel, 'neutral') : badge('Unassigned', 'warning')}
+        <a class="scheduler-card-link scheduler-card-main-link" href="${buildJobUrl(job.id, location.pathname, location.search)}"><strong>${escapeHtml(job.jobNumber)}</strong></a>
+        <div class="chip-row-inline">
+          <span class="time-pill">${escapeHtml(formatTime(job.scheduledStartAt))} to ${escapeHtml(formatTime(job.scheduledEndAt))}</span>
+          ${job.assigneeTeamMemberId ? badge(job.assignmentLabel, 'neutral') : badge('Unassigned', 'warning')}
+        </div>
       </div>
       <div class="scheduler-card-body">
         <div class="scheduler-card-title">${escapeHtml(job.titleOrServiceSummary)}</div>
-        <div class="scheduler-card-meta">${escapeHtml(job.customer?.displayName || 'Unknown customer')}</div>
-        <div class="scheduler-card-meta">${escapeHtml(formatTime(job.scheduledStartAt))} to ${escapeHtml(formatTime(job.scheduledEndAt))}</div>
+        <div class="scheduler-card-meta-row">
+          <span class="scheduler-card-meta strong">${escapeHtml(job.customer?.displayName || 'Unknown customer')}</span>
+          <span class="scheduler-card-meta">${escapeHtml(options.view === 'month' ? shortDayLabel(formatDayKey(new Date(job.scheduledStartAt))) : '')}</span>
+        </div>
+        <div class="scheduler-card-meta-row">
+          <span class="scheduler-card-meta">${escapeHtml(job.assigneeTeamMemberId ? 'Assigned' : 'Needs assignment')}</span>
+          <span class="scheduler-card-meta">${escapeHtml(options.view === 'day' ? 'Open for full record' : 'Day and job drill-in available')}</span>
+        </div>
       </div>
-      <div class="scheduler-card-actions">
-        <a class="button button-small button-ghost" href="${buildJobUrl(job.id)}">Open</a>
-        <button class="button button-small" data-action="schedule" data-job-id="${job.id}">Reschedule</button>
+      <div class="scheduler-card-actions ${options.compact ? 'compact' : ''}">
+        <a class="button button-small button-ghost" href="${buildJobUrl(job.id, location.pathname, location.search)}">Open</a>
+        <button class="button button-small" data-action="schedule" data-job-id="${job.id}">${job.scheduleState === 'scheduled' ? 'Reschedule' : 'Schedule'}</button>
         <button class="button button-small" data-action="assign" data-job-id="${job.id}">${job.assigneeTeamMemberId ? 'Reassign' : 'Assign'}</button>
-        ${job.assigneeTeamMemberId ? `<button class="button button-small button-ghost" data-action="unassign" data-job-id="${job.id}">Unassign</button>` : ''}
-        <button class="button button-small button-danger" data-action="unschedule" data-job-id="${job.id}">Unschedule</button>
+        ${job.assigneeTeamMemberId ? `<button class="button button-small button-ghost" data-action="unassign" data-job-id="${job.id}">Set unassigned</button>` : ''}
+        <button class="button button-small button-danger" data-action="unschedule" data-job-id="${job.id}">Undo schedule</button>
       </div>
     </article>
   `;
@@ -646,7 +785,7 @@ function bindSchedulerQuickActions() {
         return;
       }
       if (action === 'unschedule') {
-        if (!confirm('Unschedule this job from the calendar?')) return;
+        if (!confirm('Undo the current schedule for this job from the calendar?')) return;
         try {
           await api.unscheduleJob(jobId);
           setFlash('Job unscheduled from scheduler.', 'success');
@@ -736,7 +875,7 @@ function openCreateJobModal(customer) {
       const payload = jobPayloadFromForm(event.currentTarget);
       const job = await api.createJob(customer.id, payload);
       setFlash('Job created.', 'success');
-      location.href = buildJobUrl(job.id);
+      location.href = buildJobUrl(job.id, location.pathname, location.search);
     } catch (error) {
       document.getElementById('job-modal-status').innerHTML = statusMessage(error.message, 'danger');
     }
@@ -981,24 +1120,8 @@ function splitTags(raw) {
     .filter(Boolean);
 }
 
-function schedulerViewButton(targetView, activeView, date) {
-  return `<a class="button ${targetView === activeView ? 'button-primary' : ''}" href="${buildSchedulerUrl({ view: targetView, date })}">${escapeHtml(capitalize(targetView))}</a>`;
-}
-
-function buildSchedulerUrl({ view, date }) {
-  return `/app/calendar_new?view=${encodeURIComponent(view)}&date=${encodeURIComponent(date)}`;
-}
-
-function buildJobUrl(jobId) {
-  const params = new URLSearchParams(location.search);
-  const schedulerQuery = location.pathname === '/app/calendar_new'
-    ? `?returnTo=${encodeURIComponent(`/app/calendar_new?${params.toString()}`)}`
-    : (new URLSearchParams(location.search).get('returnTo') ? `?returnTo=${encodeURIComponent(new URLSearchParams(location.search).get('returnTo'))}` : '');
-  return `/app/jobs/${jobId}${schedulerQuery}`;
-}
-
-function getSchedulerContext() {
-  return new URLSearchParams(location.search).get('returnTo');
+function schedulerViewButton(targetView, activeView, date, filter = '') {
+  return `<a class="button ${targetView === activeView ? 'button-primary' : ''}" href="${buildSchedulerUrl({ view: targetView, date, filter })}">${escapeHtml(capitalize(targetView))}</a>`;
 }
 
 function compareJobs(left, right) {
