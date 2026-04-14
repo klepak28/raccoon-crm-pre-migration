@@ -1257,44 +1257,60 @@ function renderSchedulerView({ view, date, schedule, filter, lanes = [] }) {
 }
 
 function renderDaySchedulerView(date, schedule, filter, lanes = []) {
+  const visibleHours = Array.from({ length: 11 }, (_, index) => index + 7);
   const jobsByLane = new Map(schedule.lanes.map((lane) => [lane.id, []]));
+  const jobsByLaneAndHour = new Map(schedule.lanes.map((lane) => [
+    lane.id,
+    new Map(visibleHours.map((hour) => [hour, []])),
+  ]));
+
   for (const job of schedule.jobs) {
     if (jobDayKeys(job, date, date).includes(date)) {
       const laneId = job.assigneeTeamMemberId || 'unassigned';
       jobsByLane.get(laneId)?.push(job);
+      const jobHour = new Date(job.scheduledStartAt).getHours();
+      const clampedHour = Math.min(visibleHours.at(-1), Math.max(visibleHours[0], jobHour));
+      jobsByLaneAndHour.get(laneId)?.get(clampedHour)?.push(job);
     }
   }
 
   return `
-    <div class="day-board-shell">
-      <div class="day-time-scale">
-        <div class="timezone-pill">GMT-05</div>
-        <div class="time-scale-row">
-          ${['7am', '8am', '9am', '10am', '11am', '12pm', '1pm', '2pm', '3pm', '4pm', '5pm'].map((label) => `<span>${label}</span>`).join('')}
+    <div class="calendar-day-grid-shell">
+      <div class="calendar-day-grid" style="grid-template-columns: 88px repeat(${schedule.lanes.length}, minmax(180px, 1fr));">
+        <div class="calendar-corner-cell">
+          <div class="timezone-pill">GMT-05</div>
         </div>
-      </div>
-      <div class="lane-board">
-      ${schedule.lanes.map((lane) => {
-        const laneJobs = (jobsByLane.get(lane.id) || []).sort(compareJobs);
-        return `
-          <section class="lane-column ${lane.id === 'unassigned' ? 'lane-column-unassigned' : ''}">
-            <div class="lane-header">
+        ${schedule.lanes.map((lane) => {
+          const laneJobs = (jobsByLane.get(lane.id) || []).sort(compareJobs);
+          return `
+            <div class="calendar-lane-header ${lane.id === 'unassigned' ? 'is-unassigned' : ''}">
               <div>
-                <h3>${escapeHtml(lane.label)}</h3>
-                <p>${lane.id === 'unassigned' ? 'Scheduled work waiting for team assignment.' : 'Scheduled work assigned to this team member.'}</p>
+                <strong>${escapeHtml(lane.label)}</strong>
+                <div class="table-meta">${laneJobs.length} job${laneJobs.length === 1 ? '' : 's'}</div>
               </div>
-              ${lane.initials ? `<span class="lane-avatar">${escapeHtml(lane.initials)}</span>` : badge('Unassigned lane', 'warning')}
+              ${lane.initials ? `<span class="lane-avatar">${escapeHtml(lane.initials)}</span>` : badge('Unassigned', 'warning')}
             </div>
-            <div class="lane-summary">
-              <span>${laneJobs.length} job${laneJobs.length === 1 ? '' : 's'}</span>
-              ${lane.id === 'unassigned' ? '<span>Assign from the card or job page</span>' : '<span>Open any job for full detail</span>'}
-            </div>
-            <div class="lane-body">
-              ${laneJobs.length ? laneJobs.map((job) => schedulerCard(job, { view: 'day', filter })).join('') : `<div class="empty-lane">No scheduled jobs in this lane for the focused day.</div>`}
-            </div>
-          </section>
-        `;
-      }).join('')}
+          `;
+        }).join('')}
+
+        ${visibleHours.map((hour) => {
+          const row = [`<div class="calendar-hour-cell">${escapeHtml(formatHourLabel(hour))}</div>`];
+          for (const lane of schedule.lanes) {
+            const laneJobs = (jobsByLaneAndHour.get(lane.id)?.get(hour) || []).sort(compareJobs);
+            row.push(`
+              <div class="calendar-slot ${lane.id === 'unassigned' ? 'is-unassigned' : ''}">
+                ${laneJobs.length
+                  ? laneJobs.map((job) => renderDayEventCard(job)).join('')
+                  : '<div class="calendar-slot-empty"></div>'}
+              </div>
+            `);
+          }
+          return row.join('');
+        }).join('')}
+      </div>
+      ${schedule.jobs.some((job) => !job.assigneeTeamMemberId)
+        ? '<div class="table-meta">Unassigned jobs stay in their own column until a team is selected.</div>'
+        : ''}
       </div>
     </div>
   `;
@@ -1360,8 +1376,8 @@ function renderMonthSchedulerView(date, schedule, filter, lanes = []) {
               <span>${daySummary.unassigned ? `${daySummary.unassigned} unassigned` : 'All assigned or empty'}</span>
             </div>
             <div class="month-day-body">
-              ${dayJobs.length ? dayJobs.slice(0, 2).map((job) => schedulerCard(job, { compact: true, month: true, filter })).join('') : '<div class="empty-lane">No jobs</div>'}
-              ${dayJobs.length > 2 ? `<a class="more-link" href="${buildDayUrl(day, filter, lanes)}">Open day to view ${dayJobs.length - 2} more</a>` : ''}
+              ${dayJobs.length ? dayJobs.slice(0, 4).map((job) => renderMonthEventBar(job)).join('') : '<div class="empty-lane">No jobs</div>'}
+              ${dayJobs.length > 4 ? `<a class="more-link" href="${buildDayUrl(day, filter, lanes)}">Open day to view ${dayJobs.length - 4} more</a>` : ''}
             </div>
           </section>
         `;
@@ -1963,6 +1979,31 @@ function schedulerViewButton(targetView, activeView, date, filter = '', lanes = 
 
 function compareJobs(left, right) {
   return new Date(left.scheduledStartAt).getTime() - new Date(right.scheduledStartAt).getTime();
+}
+
+function renderDayEventCard(job) {
+  return `
+    <a class="calendar-event ${!job.assigneeTeamMemberId ? 'is-unassigned' : ''}" href="${buildJobUrl(job.id, location.pathname, location.search)}">
+      <div class="calendar-event-time">${escapeHtml(formatTime(job.scheduledStartAt))} to ${escapeHtml(formatTime(job.scheduledEndAt))}</div>
+      <div class="calendar-event-title">${escapeHtml(job.titleOrServiceSummary)}</div>
+      <div class="calendar-event-meta">${escapeHtml(job.customer?.displayName || 'Unknown customer')}</div>
+    </a>
+  `;
+}
+
+function renderMonthEventBar(job) {
+  return `
+    <a class="month-event-bar ${!job.assigneeTeamMemberId ? 'is-unassigned' : ''}" href="${buildJobUrl(job.id, location.pathname, location.search)}">
+      <span class="month-event-time">${escapeHtml(formatTime(job.scheduledStartAt))}</span>
+      <span class="month-event-label">${escapeHtml(job.titleOrServiceSummary)}</span>
+    </a>
+  `;
+}
+
+function formatHourLabel(hour) {
+  const suffix = hour >= 12 ? 'pm' : 'am';
+  const normalized = hour % 12 || 12;
+  return `${normalized}${suffix}`;
 }
 
 function showTransientPageNotice(message, tone = 'info') {
