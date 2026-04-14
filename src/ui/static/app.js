@@ -815,6 +815,88 @@ async function renderNewJobPage() {
                 ${getActiveTeamMembers().map((member) => `<option value="${member.id}">${escapeHtml(member.displayName)}</option>`).join('')}
               </select>
             </label>
+            <div class="stack-gap recurrence-toggle-panel">
+              <div class="label">Recurring</div>
+              <div class="inline-actions recurrence-toggle-row">
+                <label class="radio-row"><input type="radio" name="recurrenceEnabled" value="no" checked /> No</label>
+                <label class="radio-row"><input type="radio" name="recurrenceEnabled" value="yes" /> Yes</label>
+              </div>
+            </div>
+            <div id="recurrence-shell" class="stack-gap recurring-inline-editor" hidden>
+              <div class="stack-gap-sm">
+                <div class="label">Repeats</div>
+                <select name="recurrencePreset" id="recurrence-preset">
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="yearly">Yearly</option>
+                  <option value="custom" selected>Custom</option>
+                </select>
+              </div>
+              <div id="recurrence-custom-section">
+                <div class="form-grid two-columns">
+                  <label>
+                    <span>Repeats every</span>
+                    <input name="recurrenceInterval" type="number" value="1" min="1" max="999" />
+                  </label>
+                  <label>
+                    <span>Unit</span>
+                    <select name="recurrenceFrequency">
+                      <option value="daily">Day</option>
+                      <option value="weekly" selected>Week</option>
+                      <option value="monthly">Month</option>
+                      <option value="yearly">Year</option>
+                    </select>
+                  </label>
+                </div>
+                <div id="recurrence-weekday-chips" class="chip-row">
+                  <span class="label">Repeats on</span>
+                  ${['SUN','MON','TUE','WED','THU','FRI','SAT'].map((d) => `<label class="chip-toggle"><input type="checkbox" name="recurrenceDayOfWeek" value="${d}" /><span>${d.slice(0,1)}</span></label>`).join('')}
+                </div>
+                <div id="recurrence-monthly-mode" hidden>
+                  <label>
+                    <span>Monthly mode</span>
+                    <select name="monthlyMode">
+                      <option value="dayOfMonth">Day of month</option>
+                      <option value="ordinal">Ordinal weekday</option>
+                    </select>
+                  </label>
+                  <div id="recurrence-day-of-month-section">
+                    <label>
+                      <span>Day of month</span>
+                      <input name="recurrenceDayOfMonth" type="number" min="1" max="31" value="1" />
+                    </label>
+                  </div>
+                  <div id="recurrence-ordinal-section" hidden>
+                    <div class="form-grid two-columns">
+                      <label>
+                        <span>Ordinal</span>
+                        <select name="recurrenceOrdinal">
+                          <option value="first">First</option>
+                          <option value="second">Second</option>
+                          <option value="third">Third</option>
+                          <option value="fourth">Fourth</option>
+                          <option value="fifth">Fifth</option>
+                          <option value="last">Last</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span>Day</span>
+                        <select name="recurrenceOrdinalDay">
+                          ${['SUN','MON','TUE','WED','THU','FRI','SAT'].map((d) => `<option value="${d}">${d}</option>`).join('')}
+                        </select>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+                <fieldset class="stack-gap-sm">
+                  <legend>Ends</legend>
+                  <label class="radio-row"><input type="radio" name="recurrenceEndMode" value="never" checked /> Never</label>
+                  <label class="radio-row"><input type="radio" name="recurrenceEndMode" value="after_n_occurrences" /> After <input type="number" name="recurrenceOccurrenceCount" value="10" min="1" class="inline-number" /> occurrences</label>
+                  <label class="radio-row"><input type="radio" name="recurrenceEndMode" value="on_date" /> On <input type="date" name="recurrenceEndDate" class="inline-date" /></label>
+                </fieldset>
+              </div>
+            </div>
             ${customer.doNotService ? statusMessage('This customer is marked do not service. You can create the job, but the schedule save step will be skipped.', 'warning') : '<div class="table-meta">Leave the team blank to keep the job in the Unassigned lane after scheduling.</div>'}
           </section>
 
@@ -963,18 +1045,32 @@ async function renderNewJobPage() {
   document.getElementById('new-job-help-button')?.addEventListener('click', () => {
     showTransientPageNotice('In-product help is visible in the target UI, but remains outside the supported V1 scope.', 'warning');
   });
+  bindRecurrenceControls();
   document.getElementById('new-job-page-form').addEventListener('submit', async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
     const statusRegion = document.getElementById('new-job-page-status');
     try {
-      const payload = jobPayloadFromForm(form);
-      const created = await api.createJob(customer.id, payload);
-
       const skipSchedule = form.querySelector('[name="skipSchedule"]').checked;
       const start = form.querySelector('[name="scheduledStartAt"]').value;
       const end = form.querySelector('[name="scheduledEndAt"]').value;
       const teamMemberId = form.querySelector('[name="teamMemberId"]').value;
+      const recurrenceEnabled = form.querySelector('[name="recurrenceEnabled"]:checked')?.value === 'yes';
+
+      if (recurrenceEnabled) {
+        if (skipSchedule) {
+          throw new Error('Recurring jobs must be scheduled. Turn off "Create unscheduled" to continue.');
+        }
+        if (!start || !end) {
+          throw new Error('Recurring jobs require both start and end time.');
+        }
+        if (customer.doNotService) {
+          throw new Error('Recurring jobs cannot be created for do-not-service customers.');
+        }
+      }
+
+      const payload = jobPayloadFromForm(form);
+      const created = await api.createJob(customer.id, payload);
 
       if (!skipSchedule && start && end && !customer.doNotService) {
         await api.scheduleJob(created.id, {
@@ -987,7 +1083,13 @@ async function renderNewJobPage() {
         await api.assignJob(created.id, teamMemberId);
       }
 
-      setFlash('Job created.', 'success');
+      if (recurrenceEnabled) {
+        const recurrenceRule = buildRecurrencePayload(form);
+        await api.enableRecurrence(created.id, recurrenceRule);
+        setFlash('Recurring job created.', 'success');
+      } else {
+        setFlash('Job created.', 'success');
+      }
       location.href = buildJobUrl(created.id, location.pathname, location.search);
     } catch (error) {
       statusRegion.innerHTML = statusMessage(error.message, 'danger');
@@ -2885,12 +2987,52 @@ function bindRecurrenceControls() {
   const customSection = document.getElementById('recurrence-custom-section');
   if (!preset || !customSection) return;
 
+  const recurrenceShell = document.getElementById('recurrence-shell');
+  const recurrenceEnabledInputs = Array.from(document.querySelectorAll('[name="recurrenceEnabled"]'));
   const freqSelect = customSection.querySelector('[name="recurrenceFrequency"]');
   const weekdayChips = document.getElementById('recurrence-weekday-chips');
   const monthlyMode = document.getElementById('recurrence-monthly-mode');
   const monthlyModeSelect = customSection.querySelector('[name="monthlyMode"]');
   const dayOfMonthSection = document.getElementById('recurrence-day-of-month-section');
   const ordinalSection = document.getElementById('recurrence-ordinal-section');
+  const startInput = document.querySelector('[name="scheduledStartAt"]');
+
+  function syncEnabled() {
+    if (!recurrenceShell || recurrenceEnabledInputs.length === 0) return;
+    const enabled = recurrenceEnabledInputs.some((input) => input.checked && input.value === 'yes');
+    recurrenceShell.hidden = !enabled;
+    if (enabled && preset.value === 'none') {
+      preset.value = 'custom';
+    }
+    if (enabled) {
+      ensureRecurringDefaults();
+      syncPreset();
+    }
+  }
+
+  function ensureRecurringDefaults() {
+    const freq = freqSelect?.value || (preset.value === 'custom' ? 'weekly' : preset.value);
+    if (freqSelect && !freqSelect.value) freqSelect.value = 'weekly';
+    if (preset.value === 'custom' && freqSelect && !freqSelect.value) freqSelect.value = 'weekly';
+    if (freq === 'weekly') {
+      seedWeeklySelectionFromStart();
+    }
+    if ((freq === 'monthly' || freq === 'yearly') && monthlyModeSelect?.value !== 'ordinal') {
+      const scheduledDate = startInput?.value ? new Date(startInput.value) : new Date();
+      const dayOfMonth = customSection.querySelector('[name="recurrenceDayOfMonth"]');
+      if (dayOfMonth && !dayOfMonth.value) {
+        dayOfMonth.value = String(scheduledDate.getDate());
+      }
+    }
+  }
+
+  function seedWeeklySelectionFromStart() {
+    const weekdayInputs = Array.from(customSection.querySelectorAll('[name="recurrenceDayOfWeek"]'));
+    if (!weekdayInputs.length || weekdayInputs.some((input) => input.checked)) return;
+    const weekday = weekdayTokenFromLocalDateTime(startInput?.value);
+    const match = weekdayInputs.find((input) => input.value === weekday);
+    if (match) match.checked = true;
+  }
 
   function syncPreset() {
     const val = preset.value;
@@ -2903,7 +3045,6 @@ function bindRecurrenceControls() {
       syncFrequency();
       return;
     }
-    // Preset maps to a simple rule
     customSection.hidden = false;
     if (freqSelect) freqSelect.value = val;
     const intervalInput = customSection.querySelector('[name="recurrenceInterval"]');
@@ -2917,6 +3058,7 @@ function bindRecurrenceControls() {
     const supportsDayPattern = freq === 'monthly' || freq === 'yearly';
     if (weekdayChips) weekdayChips.hidden = !isWeekly;
     if (monthlyMode) monthlyMode.hidden = !supportsDayPattern;
+    if (isWeekly) seedWeeklySelectionFromStart();
   }
 
   function syncMonthlyMode() {
@@ -2925,12 +3067,20 @@ function bindRecurrenceControls() {
     if (ordinalSection) ordinalSection.hidden = mode !== 'ordinal';
   }
 
+  recurrenceEnabledInputs.forEach((input) => input.addEventListener('change', syncEnabled));
+  startInput?.addEventListener('change', ensureRecurringDefaults);
   preset.addEventListener('change', syncPreset);
   freqSelect?.addEventListener('change', syncFrequency);
   monthlyModeSelect?.addEventListener('change', syncMonthlyMode);
 
+  syncEnabled();
   syncPreset();
   syncMonthlyMode();
+}
+
+function weekdayTokenFromLocalDateTime(value) {
+  const date = value ? new Date(value) : new Date();
+  return ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'][date.getDay()];
 }
 
 function buildRecurrencePayload(form) {

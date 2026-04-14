@@ -1885,6 +1885,15 @@ button {
   border-top: 1px solid var(--border);
 }
 
+.recurrence-toggle-panel {
+  padding-top: 4px;
+}
+
+.recurrence-toggle-row {
+  justify-content: flex-start;
+  gap: 16px;
+}
+
 .recurring-icon {
   font-size: 11px;
   opacity: 0.7;
