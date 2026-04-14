@@ -29,7 +29,12 @@ export async function handleRoute({ req, res, url, context }) {
     return true;
   }
 
-  if (req.method === 'GET' && (url.pathname === '/app/customers/list' || url.pathname === '/app/calendar_new' || matchRoute(req.method, url.pathname, '/app/jobs/:jobId'))) {
+  if (req.method === 'GET' && (
+    url.pathname === '/app/customers/list' ||
+    url.pathname === '/app/calendar_new' ||
+    matchRoute(req.method, url.pathname, '/app/jobs/:jobId') ||
+    matchRoute(req.method, url.pathname, '/app/customers/:customerId')
+  )) {
     sendHtml(res, 200, renderAppShell('CRM V1'));
     return true;
   }
@@ -128,6 +133,16 @@ export async function handleRoute({ req, res, url, context }) {
 
   if (req.method === 'GET' && url.pathname === '/api/schedule/day') {
     sendJson(res, 200, { item: services.scheduler.getDaySchedule(url.searchParams.get('date')) });
+    return true;
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/schedule/range') {
+    sendJson(res, 200, {
+      item: services.scheduler.getScheduleRange(
+        url.searchParams.get('startDate'),
+        url.searchParams.get('endDate'),
+      ),
+    });
     return true;
   }
 

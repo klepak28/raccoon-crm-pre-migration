@@ -30,3 +30,14 @@ test('scheduler shell is served on the expected route', async () => {
     assert.match(html, /CRM V1/);
   });
 });
+
+test('dedicated customer detail shell is served on the expected route', async () => {
+  const app = createApp({ staticRoot, context: createContext() });
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/app/customers/c_0001`);
+    const html = await response.text();
+    assert.equal(response.status, 200);
+    assert.match(html, /CRM V1/);
+    assert.match(html, /\/static\/app.js/);
+  });
+});

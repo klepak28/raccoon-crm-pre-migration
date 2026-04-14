@@ -4,6 +4,10 @@ import { createContext } from '../../../src/bootstrap/create-context.js';
 import { validateCustomerInput } from '../../../src/validation/customers/customer-input.validator.js';
 import { validateJobInput } from '../../../src/validation/jobs/job-input.validator.js';
 
+// V1 day convention: the UI converts datetime-local values to UTC using the local
+// timezone (new Date(str).toISOString()), and the backend filters with local midnight
+// boundaries.  Both sides use the same local-day interpretation so near-midnight jobs
+// are never shifted to the wrong scheduler day.  This helper mirrors app.js toIso().
 function toUiIso(localDateTime) {
   return new Date(localDateTime).toISOString();
 }
@@ -58,6 +62,9 @@ test('moves job into assigned lane after assignment', () => {
   assert.equal(lane.jobs[0].id, job.id);
 });
 
+// Near-midnight regression: V1 day rule uses local time boundaries throughout.
+// A job scheduled in the UI as local 23:30→00:30 must appear on the selected
+// local day (13th) and also on the next day (14th) because it spans local midnight.
 test('uses the same local-day interpretation as UI scheduling input near midnight', () => {
   const context = createContext();
   const customer = createCustomer(context);
@@ -76,4 +83,79 @@ test('uses the same local-day interpretation as UI scheduling input near midnigh
 
   assert.equal(selectedDay.lanes[0].jobs.some((item) => item.id === job.id), true);
   assert.equal(nextDay.lanes[0].jobs.some((item) => item.id === job.id), true);
+});
+
+// Boundary regression: a job entirely within local 23:30–23:59 on day D must
+// appear on day D and must NOT appear on the previous day (D-1).
+test('near-midnight job wholly within a day does not appear on the previous day', () => {
+  const context = createContext();
+  const customer = createCustomer(context);
+  const job = context.services.jobs.createOneTimeJob(customer.id, validateJobInput({
+    titleOrServiceSummary: 'Late night only',
+    customerAddressId: customer.addresses[0].id,
+  }));
+
+  context.services.jobs.scheduleJob(job.id, {
+    scheduledStartAt: toUiIso('2026-04-13T23:30'),
+    scheduledEndAt: toUiIso('2026-04-13T23:59'),
+  });
+
+  const day = context.services.scheduler.getDaySchedule('2026-04-13');
+  const prevDay = context.services.scheduler.getDaySchedule('2026-04-12');
+
+  assert.equal(day.lanes[0].jobs.some((item) => item.id === job.id), true, 'job should be on selected day');
+  assert.equal(prevDay.lanes[0].jobs.some((item) => item.id === job.id), false, 'job must not bleed into previous day');
+});
+
+// Boundary regression: a job starting at local 00:00 on day D must appear on D
+// and must NOT appear on day D-1.
+test('job starting at local midnight does not appear on the previous day', () => {
+  const context = createContext();
+  const customer = createCustomer(context);
+  const job = context.services.jobs.createOneTimeJob(customer.id, validateJobInput({
+    titleOrServiceSummary: 'Early start',
+    customerAddressId: customer.addresses[0].id,
+  }));
+
+  context.services.jobs.scheduleJob(job.id, {
+    scheduledStartAt: toUiIso('2026-04-14T00:00'),
+    scheduledEndAt: toUiIso('2026-04-14T01:00'),
+  });
+
+  const day = context.services.scheduler.getDaySchedule('2026-04-14');
+  const prevDay = context.services.scheduler.getDaySchedule('2026-04-13');
+
+  assert.equal(day.lanes[0].jobs.some((item) => item.id === job.id), true, 'job should be on its start day');
+  assert.equal(prevDay.lanes[0].jobs.some((item) => item.id === job.id), false, 'job at midnight must not appear on previous day');
+});
+
+test('range query returns scheduled jobs with lane metadata for calendar views', () => {
+  const context = createContext();
+  const customer = createCustomer(context);
+  const firstJob = context.services.jobs.createOneTimeJob(customer.id, validateJobInput({
+    titleOrServiceSummary: 'Monday visit',
+    customerAddressId: customer.addresses[0].id,
+  }));
+  const secondJob = context.services.jobs.createOneTimeJob(customer.id, validateJobInput({
+    titleOrServiceSummary: 'Wednesday visit',
+    customerAddressId: customer.addresses[0].id,
+  }));
+
+  context.services.jobs.scheduleJob(firstJob.id, {
+    scheduledStartAt: toUiIso('2026-04-13T09:00'),
+    scheduledEndAt: toUiIso('2026-04-13T10:00'),
+  });
+  context.services.jobs.scheduleJob(secondJob.id, {
+    scheduledStartAt: toUiIso('2026-04-15T11:00'),
+    scheduledEndAt: toUiIso('2026-04-15T12:00'),
+  });
+  context.services.jobs.assignJob(secondJob.id, 'tm_0002');
+
+  const range = context.services.scheduler.getScheduleRange('2026-04-13', '2026-04-19');
+
+  assert.equal(range.jobs.length, 2);
+  assert.equal(range.jobs.some((item) => item.id === firstJob.id), true);
+  assert.equal(range.jobs.some((item) => item.id === secondJob.id), true);
+  assert.equal(range.lanes[0].id, 'unassigned');
+  assert.equal(range.lanes.some((item) => item.id === 'tm_0002'), true);
 });

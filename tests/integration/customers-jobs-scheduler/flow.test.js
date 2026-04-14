@@ -141,8 +141,9 @@ test('schedule day query stays consistent with UI local datetime input near midn
     const jobPayload = await jobResponse.json();
     const jobId = jobPayload.item.id;
 
-    const scheduledStartAt = new Date('2026-04-13T23:30').toISOString();
-    const scheduledEndAt = new Date('2026-04-14T00:30').toISOString();
+    // V1 UTC convention: treat datetime-local strings as UTC directly (append Z, no offset).
+    const scheduledStartAt = '2026-04-13T23:30:00.000Z';
+    const scheduledEndAt = '2026-04-14T00:30:00.000Z';
 
     const scheduleResponse = await fetch(`${baseUrl}/api/jobs/${jobId}/schedule`, {
       method: 'POST',
@@ -158,6 +159,83 @@ test('schedule day query stays consistent with UI local datetime input near midn
     const detailResponse = await fetch(`${baseUrl}/api/jobs/${jobId}`);
     const detailPayload = await detailResponse.json();
     assert.match(detailPayload.item.scheduledStartAt, /^2026-04-14T|^2026-04-13T/);
+  });
+});
+
+test('schedule range query supports calendar views across multiple days', async () => {
+  const context = createContext();
+  const app = createApp({ staticRoot, context });
+
+  await withServer(app, async (baseUrl) => {
+    const customerResponse = await fetch(`${baseUrl}/api/customers`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        displayName: 'Calendar Range Customer',
+        customerType: 'Homeowner',
+        street: '1 Main',
+        city: 'Austin',
+        state: 'TX',
+        zip: '73301',
+      }),
+    });
+    const customerPayload = await customerResponse.json();
+    const customerId = customerPayload.item.id;
+    const addressId = customerPayload.item.addresses[0].id;
+
+    const firstJobResponse = await fetch(`${baseUrl}/api/customers/${customerId}/jobs`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        titleOrServiceSummary: 'Tuesday visit',
+        customerAddressId: addressId,
+      }),
+    });
+    const firstJobPayload = await firstJobResponse.json();
+
+    const secondJobResponse = await fetch(`${baseUrl}/api/customers/${customerId}/jobs`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        titleOrServiceSummary: 'Thursday visit',
+        customerAddressId: addressId,
+      }),
+    });
+    const secondJobPayload = await secondJobResponse.json();
+
+    await fetch(`${baseUrl}/api/jobs/${firstJobPayload.item.id}/schedule`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        scheduledStartAt: '2026-04-14T14:00:00.000Z',
+        scheduledEndAt: '2026-04-14T15:00:00.000Z',
+      }),
+    });
+
+    await fetch(`${baseUrl}/api/jobs/${secondJobPayload.item.id}/schedule`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        scheduledStartAt: '2026-04-16T09:00:00.000Z',
+        scheduledEndAt: '2026-04-16T10:00:00.000Z',
+      }),
+    });
+
+    await fetch(`${baseUrl}/api/jobs/${secondJobPayload.item.id}/assign`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ teamMemberId: 'tm_0001' }),
+    });
+
+    const rangeResponse = await fetch(`${baseUrl}/api/schedule/range?startDate=2026-04-13&endDate=2026-04-19`);
+    const rangePayload = await rangeResponse.json();
+
+    assert.equal(rangeResponse.status, 200);
+    assert.equal(rangePayload.item.jobs.length, 2);
+    assert.equal(rangePayload.item.jobs.some((item) => item.id === firstJobPayload.item.id), true);
+    assert.equal(rangePayload.item.jobs.some((item) => item.id === secondJobPayload.item.id), true);
+    assert.equal(rangePayload.item.lanes.some((lane) => lane.id === 'unassigned'), true);
+    assert.equal(rangePayload.item.lanes.some((lane) => lane.id === 'tm_0001'), true);
   });
 });
 
