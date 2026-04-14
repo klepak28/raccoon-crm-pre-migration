@@ -736,6 +736,27 @@ button {
   padding-inline: 9px;
 }
 
+.scheduler-backlog-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.backlog-card {
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: white;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.backlog-card-warning {
+  border-color: #f3cf8e;
+  background: #fffdf7;
+}
+
 .status-panel {
   border: 1px solid var(--border);
   background: var(--panel-muted);

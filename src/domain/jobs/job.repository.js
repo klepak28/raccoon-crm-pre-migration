@@ -29,6 +29,9 @@ export function createJobRepository(store) {
       const job = store.jobs.find((item) => item.id === jobId);
       return job ? clone(job) : null;
     },
+    list() {
+      return clone(store.jobs);
+    },
     listByCustomerId(customerId) {
       return clone(store.jobs.filter((job) => job.customerId === customerId));
     },

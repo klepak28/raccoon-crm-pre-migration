@@ -2,6 +2,7 @@ import { api } from './api.js';
 import {
   addDays,
   formatDateRange,
+  formatDateTime,
   formatDayKey,
   formatTime,
   localToday,
@@ -21,7 +22,7 @@ import {
   formatRangeLabel,
 } from './date-utils.js';
 import { badge, chips, consumeFlash, emptyState, escapeHtml, formatAddress, setFlash, statusMessage } from './ui.js';
-import { buildDayUrl, buildJobUrl, buildSchedulerUrl, getSchedulerContext } from './scheduler-links.js';
+import { buildCustomerUrl, buildDayUrl, buildJobUrl, buildSchedulerUrl, getSchedulerContext } from './scheduler-links.js';
 
 const app = document.getElementById('app');
 const state = {
@@ -300,13 +301,13 @@ async function renderCustomerDetailPage(customerId) {
     `,
   });
 
-  renderCustomerJobs(customer.jobs);
+  renderCustomerJobs(customer, customer.jobs);
   document.getElementById('edit-customer-button').addEventListener('click', () => openCustomerFormModal({ mode: 'edit', customer }));
   document.getElementById('new-job-button').addEventListener('click', () => openCreateJobModal(customer));
   document.getElementById('new-job-inline-button').addEventListener('click', () => openCreateJobModal(customer));
 }
 
-function renderCustomerJobs(jobs) {
+function renderCustomerJobs(customer, jobs) {
   const region = document.getElementById('customer-jobs-region');
   if (!jobs.length) {
     region.innerHTML = emptyState('No jobs yet', 'Create the first one-time job from this customer record.');
@@ -320,17 +321,25 @@ function renderCustomerJobs(jobs) {
           <tr>
             <th>Job</th>
             <th>Service</th>
+            <th>Address</th>
             <th>Schedule</th>
             <th>Assignee</th>
           </tr>
         </thead>
         <tbody>
           ${jobs.map((job) => `
-            <tr data-href="/app/jobs/${job.id}" class="clickable-row">
-              <td>${escapeHtml(job.jobNumber)}</td>
-              <td>${escapeHtml(job.titleOrServiceSummary)}</td>
+            <tr data-href="${buildJobUrl(job.id, location.pathname, location.search)}" class="clickable-row">
+              <td>
+                <div class="table-title">${escapeHtml(job.jobNumber)}</div>
+                <div class="table-meta">${job.scheduleState === 'scheduled' ? 'Scheduled job' : 'Ready to schedule'}</div>
+              </td>
+              <td>
+                <div>${escapeHtml(job.titleOrServiceSummary)}</div>
+                <div class="table-meta">${job.scheduleState === 'scheduled' ? 'Open detail to reschedule or change team' : 'Open detail to schedule or assign'}</div>
+              </td>
+              <td>${escapeHtml(formatAddress(job.address) || formatAddress(customer.addresses[0]) || 'No address')}</td>
               <td>${job.scheduleState === 'scheduled' ? escapeHtml(formatDateRange(job.scheduledStartAt, job.scheduledEndAt)) : badge('Unscheduled', 'warning')}</td>
-              <td>${escapeHtml(job.assigneeTeamMemberId || 'Unassigned')}</td>
+              <td>${job.assigneeDisplayName ? escapeHtml(job.assigneeDisplayName) : badge('Unassigned', 'warning')}</td>
             </tr>
           `).join('')}
         </tbody>
@@ -349,21 +358,23 @@ async function renderJobDetailPage(jobId) {
   const job = await api.getJob(jobId);
   const customer = await api.getCustomer(job.customer.id);
   const schedulerContext = getSchedulerContext(location.search);
+  const returnLabel = schedulerContext ? 'Back to scheduler' : 'Back to customer';
+  const returnHref = schedulerContext || `/app/customers/${job.customer.id}`;
   renderShell({
     title: `${job.jobNumber} • ${job.titleOrServiceSummary}`,
     subtitle: `${job.scheduleState === 'scheduled' ? 'Scheduled' : 'Unscheduled'} • ${job.assignee?.displayName || 'Unassigned'}`,
-    nav: 'scheduler',
+    nav: schedulerContext ? 'scheduler' : 'customers',
     breadcrumbs: [
       `<a href="/app/customers/list">Customers</a>`,
-      `<a href="/app/customers/${job.customer.id}">${escapeHtml(job.customer.displayName)}</a>`,
+      `<a href="${buildCustomerUrl(job.customer.id, location.pathname, location.search)}">${escapeHtml(job.customer.displayName)}</a>`,
       escapeHtml(job.jobNumber),
     ],
     actions: `
       <button class="button" id="edit-job-button">Edit job</button>
-      <button class="button" id="schedule-job-button">${job.scheduleState === 'scheduled' ? 'Reschedule' : 'Schedule'}</button>
-      <button class="button" id="edit-team-button">${job.assignmentState === 'assigned' ? 'Edit team' : 'Assign'}</button>
-      <button class="button button-danger" id="unschedule-job-button" ${job.scheduleState === 'scheduled' ? '' : 'disabled'}>Undo schedule</button>
-      <a class="button button-ghost" href="${escapeHtml(schedulerContext || '/app/calendar_new')}">Back to scheduler</a>
+      <button class="button button-primary" id="schedule-job-button">${job.scheduleState === 'scheduled' ? 'Reschedule' : 'Schedule'}</button>
+      <button class="button" id="edit-team-button">${job.assignmentState === 'assigned' ? 'Reassign' : 'Assign'}</button>
+      <button class="button button-danger" id="unschedule-job-button" ${job.scheduleState === 'scheduled' ? '' : 'disabled'}>Unschedule</button>
+      <a class="button button-ghost" href="${escapeHtml(returnHref)}">${escapeHtml(returnLabel)}</a>
     `,
     content: `
       <section class="detail-grid">
@@ -374,12 +385,13 @@ async function renderJobDetailPage(jobId) {
               <div class="chip-row-inline">
                 ${job.scheduleState === 'scheduled' ? badge('Scheduled', 'success') : badge('Unscheduled', 'warning')}
                 ${job.assignee?.displayName ? badge(job.assignee.displayName, 'neutral') : badge('Unassigned', 'warning')}
+                ${job.customer.doNotService ? badge('Do not service', 'danger') : ''}
               </div>
             </div>
             <div class="profile-grid">
               <div>
                 <div class="label">Customer</div>
-                <div><a href="/app/customers/${job.customer.id}">${escapeHtml(job.customer.displayName)}</a></div>
+                <div><a href="${buildCustomerUrl(job.customer.id, location.pathname, location.search)}">${escapeHtml(job.customer.displayName)}</a></div>
               </div>
               <div>
                 <div class="label">Address</div>
@@ -400,25 +412,49 @@ async function renderJobDetailPage(jobId) {
             </div>
           </div>
           <div class="surface-card stack-gap">
-            <h2 class="section-title">Schedule and assignment</h2>
+            <div class="section-header">
+              <h2 class="section-title">Schedule and assignment</h2>
+              <div class="chip-row-inline">
+                ${job.scheduleState === 'scheduled' ? badge('Visit placed', 'success') : badge('Needs schedule', 'warning')}
+                ${job.assignee ? badge('Team set', 'success') : badge('Needs team', 'warning')}
+              </div>
+            </div>
             <div class="status-panel-grid">
               <div class="status-panel">
                 <div class="label">Schedule state</div>
                 <strong>${job.scheduleState === 'scheduled' ? escapeHtml(formatDateRange(job.scheduledStartAt, job.scheduledEndAt)) : 'Unscheduled'}</strong>
+                <div class="table-meta">${job.scheduleState === 'scheduled' ? 'Use Reschedule to move the visit without leaving this page.' : 'Schedule this one-time job to place it on the calendar.'}</div>
               </div>
               <div class="status-panel">
                 <div class="label">Assignee</div>
                 <strong>${escapeHtml(job.assignee?.displayName || 'Unassigned')}</strong>
+                <div class="table-meta">${job.assignee ? 'Assignment is independent from scheduling in V1.' : 'You can keep the job scheduled while still unassigned.'}</div>
               </div>
+            </div>
+            <div class="inline-actions">
+              <button class="button button-primary" id="schedule-job-inline-button">${job.scheduleState === 'scheduled' ? 'Reschedule visit' : 'Schedule visit'}</button>
+              <button class="button" id="edit-team-inline-button">${job.assignmentState === 'assigned' ? 'Change team' : 'Assign team'}</button>
+              ${job.assignmentState === 'assigned' ? '<button class="button button-ghost" id="unassign-job-inline-button">Set unassigned</button>' : ''}
             </div>
             ${job.customer.doNotService ? statusMessage('This customer is flagged as do not service, so scheduling remains blocked in V1.', 'warning') : ''}
           </div>
         </div>
         <aside class="stack-gap-lg">
           <div class="surface-card stack-gap">
-            <h2 class="section-title">Context</h2>
-            <p class="muted">Use this page to keep one-time job details accurate, then jump back into the scheduler for day, week, or month planning.</p>
-            <a class="button button-ghost" href="/app/customers/${job.customer.id}">Back to customer</a>
+            <h2 class="section-title">Next step</h2>
+            <p class="muted">${escapeHtml(job.scheduleState === 'scheduled'
+              ? (job.assignee ? 'This visit is placed and staffed. Use the scheduler for day, week, or month coordination.' : 'This visit is on the calendar but still needs a team assignment.')
+              : 'This job is still unscheduled. Place it on the calendar, then adjust assignment if needed.')}</p>
+            <div class="inline-actions">
+              <a class="button button-ghost" href="${buildCustomerUrl(job.customer.id, location.pathname, location.search)}">Customer record</a>
+              <a class="button button-ghost" href="${escapeHtml(schedulerContext || '/app/calendar_new')}">Scheduler</a>
+            </div>
+          </div>
+          <div class="surface-card stack-gap">
+            <h2 class="section-title">Operational context</h2>
+            <div class="stat-row"><span>Primary phone</span><strong>${escapeHtml(job.customer.primaryPhone || job.customer.phones?.[0]?.value || 'None')}</strong></div>
+            <div class="stat-row"><span>Address</span><strong>${escapeHtml(formatAddress(job.address) || 'No address')}</strong></div>
+            <div class="stat-row"><span>Last updated</span><strong>${escapeHtml(formatDateTime(job.updatedAt))}</strong></div>
           </div>
         </aside>
       </section>
@@ -427,7 +463,18 @@ async function renderJobDetailPage(jobId) {
 
   document.getElementById('edit-job-button').addEventListener('click', () => openEditJobModal(job, customer));
   document.getElementById('schedule-job-button').addEventListener('click', () => openScheduleModal(job));
+  document.getElementById('schedule-job-inline-button').addEventListener('click', () => openScheduleModal(job));
   document.getElementById('edit-team-button').addEventListener('click', () => openTeamModal(job));
+  document.getElementById('edit-team-inline-button').addEventListener('click', () => openTeamModal(job));
+  document.getElementById('unassign-job-inline-button')?.addEventListener('click', async () => {
+    try {
+      await api.unassignJob(job.id);
+      setFlash('Assignment updated.', 'success');
+      location.reload();
+    } catch (error) {
+      showTransientPageNotice(error.message, 'danger');
+    }
+  });
   document.getElementById('unschedule-job-button').addEventListener('click', async () => {
     if (!confirm('Undo the current schedule for this job?')) return;
     try {
@@ -446,8 +493,12 @@ async function renderSchedulerPage() {
   const date = params.get('date') || localToday();
   const filter = params.get('filter') || '';
   const range = viewRange(view, date);
-  const schedule = await api.getScheduleRange(range.startDate, range.endDate);
+  const [schedule, unscheduledJobs] = await Promise.all([
+    api.getScheduleRange(range.startDate, range.endDate),
+    api.listJobs({ scheduleState: 'unscheduled' }),
+  ]);
   const filteredSchedule = filterSchedule(schedule, filter);
+  const filteredUnscheduledJobs = filterJobs(unscheduledJobs, filter);
   const rangeLabel = formatRangeLabel(view, date);
   const summary = summarizeSchedule(filteredSchedule, range.startDate, range.endDate);
 
@@ -520,6 +571,25 @@ async function renderSchedulerPage() {
             <div class="rail-card stack-gap">
               <h2 class="section-title">Range guide</h2>
               ${renderRangeGuide(view, date, filteredSchedule, filter)}
+            </div>
+            <div class="rail-card stack-gap">
+              <h2 class="section-title">Needs scheduling</h2>
+              ${renderSchedulerBacklog(filteredUnscheduledJobs, {
+                emptyTitle: 'No unscheduled jobs',
+                emptyBody: filter ? 'Nothing in the unscheduled queue matches this filter.' : 'Every current V1 job has a schedule.',
+                actionLabel: 'Schedule',
+              })}
+            </div>
+            <div class="rail-card stack-gap">
+              <h2 class="section-title">Needs assignment in range</h2>
+              ${renderSchedulerBacklog(filteredSchedule.jobs.filter((job) => !job.assigneeTeamMemberId), {
+                emptyTitle: 'No unassigned scheduled jobs',
+                emptyBody: filter ? 'Nothing in this range matches the filter.' : 'All scheduled jobs in range already have a team.',
+                actionLabel: 'Assign',
+                sourceView: view,
+                sourceDate: date,
+                sourceFilter: filter,
+              })}
             </div>
           </aside>
           <div class="scheduler-main">
@@ -685,14 +755,37 @@ function renderRangeGuide(view, date, schedule, filter = '') {
 function filterSchedule(schedule, rawFilter) {
   const filter = String(rawFilter || '').trim().toLowerCase();
   if (!filter) return schedule;
-  const jobs = schedule.jobs.filter((job) => [
-    job.jobNumber,
-    job.titleOrServiceSummary,
-    job.customer?.displayName,
-    job.assignmentLabel,
-    ...(job.customer?.tags || []),
-  ].filter(Boolean).join(' ').toLowerCase().includes(filter));
+  const jobs = filterJobs(schedule.jobs, filter);
   return { ...schedule, jobs };
+}
+
+function renderSchedulerBacklog(jobs, options = {}) {
+  if (!jobs.length) {
+    return emptyState(options.emptyTitle || 'Nothing here', options.emptyBody || 'No jobs match the current view.');
+  }
+
+  return `
+    <div class="scheduler-backlog-list">
+      ${jobs.slice(0, 6).map((job) => `
+        <article class="backlog-card ${!job.assigneeTeamMemberId ? 'backlog-card-warning' : ''}">
+          <div class="scheduler-card-top">
+            <a class="scheduler-card-link scheduler-card-main-link" href="${buildJobUrl(job.id, location.pathname, location.search)}"><strong>${escapeHtml(job.jobNumber)}</strong></a>
+            ${job.scheduleState === 'scheduled'
+              ? `<span class="time-pill">${escapeHtml(formatTime(job.scheduledStartAt))} to ${escapeHtml(formatTime(job.scheduledEndAt))}</span>`
+              : badge('Unscheduled', 'warning')}
+          </div>
+          <div class="scheduler-card-title">${escapeHtml(job.titleOrServiceSummary)}</div>
+          <div class="scheduler-card-meta">${escapeHtml(job.customer?.displayName || 'Unknown customer')}</div>
+          <div class="scheduler-card-meta">${escapeHtml(formatAddress(job.address) || 'No address')}</div>
+          <div class="scheduler-card-actions compact">
+            <a class="button button-small button-ghost" href="${buildJobUrl(job.id, location.pathname, location.search)}">Open</a>
+            <button class="button button-small" data-action="${options.actionLabel === 'Assign' ? 'assign' : 'schedule'}" data-job-id="${job.id}">${escapeHtml(options.actionLabel || 'Open')}</button>
+          </div>
+        </article>
+      `).join('')}
+      ${jobs.length > 6 ? `<div class="table-meta">Showing 6 of ${jobs.length} matching jobs. Open a record for the full workflow.</div>` : ''}
+    </div>
+  `;
 }
 
 function summarizeSchedule(schedule, start, end) {
@@ -707,6 +800,23 @@ function summarizeSchedule(schedule, start, end) {
     unassignedJobs: schedule.jobs.filter((job) => !job.assigneeTeamMemberId).length,
     daysWithJobs: activeDays.size,
   };
+}
+
+function filterJobs(jobs, rawFilter) {
+  const filter = String(rawFilter || '').trim().toLowerCase();
+  if (!filter) return jobs;
+  return jobs.filter((job) => [
+    job.jobNumber,
+    job.titleOrServiceSummary,
+    job.customer?.displayName,
+    job.customer?.primaryPhone,
+    job.assignmentLabel,
+    job.assignee?.displayName,
+    job.leadSource,
+    formatAddress(job.address),
+    ...(job.tags || []),
+    ...(job.customer?.tags || []),
+  ].filter(Boolean).join(' ').toLowerCase().includes(filter));
 }
 
 function summarizeDayJobs(jobs) {
@@ -743,19 +853,30 @@ function schedulerCard(job, options = {}) {
         <div class="scheduler-card-title">${escapeHtml(job.titleOrServiceSummary)}</div>
         <div class="scheduler-card-meta-row">
           <span class="scheduler-card-meta strong">${escapeHtml(job.customer?.displayName || 'Unknown customer')}</span>
-          <span class="scheduler-card-meta">${escapeHtml(options.view === 'month' ? shortDayLabel(formatDayKey(new Date(job.scheduledStartAt))) : '')}</span>
+          <span class="scheduler-card-meta">${escapeHtml(options.view === 'month' ? shortDayLabel(formatDayKey(new Date(job.scheduledStartAt))) : formatDurationMinutes(job.scheduledStartAt, job.scheduledEndAt))}</span>
         </div>
         <div class="scheduler-card-meta-row">
-          <span class="scheduler-card-meta">${escapeHtml(job.assigneeTeamMemberId ? 'Assigned' : 'Needs assignment')}</span>
-          <span class="scheduler-card-meta">${escapeHtml(options.view === 'day' ? 'Open for full record' : 'Day and job drill-in available')}</span>
+          <span class="scheduler-card-meta">${escapeHtml(formatAddress(job.address) || 'No address')}</span>
+          <span class="scheduler-card-meta">${escapeHtml(job.customer?.primaryPhone || 'No phone')}</span>
         </div>
+        <div class="scheduler-card-meta-row">
+          <span class="scheduler-card-meta">${escapeHtml(job.assigneeTeamMemberId ? 'Assigned and ready' : 'Needs assignment')}</span>
+          <span class="scheduler-card-meta">${escapeHtml(job.customer?.doNotService ? 'Customer blocked for new scheduling' : 'Open job or customer from here')}</span>
+        </div>
+        ${!options.compact && (job.tags?.length || job.customer?.tags?.length) ? `
+          <div class="chip-row-inline">
+            ${(job.tags || []).slice(0, 2).map((tag) => `<span class="chip">${escapeHtml(tag)}</span>`).join('')}
+            ${(job.customer?.tags || []).slice(0, 2).map((tag) => `<span class="chip">${escapeHtml(tag)}</span>`).join('')}
+          </div>
+        ` : ''}
       </div>
       <div class="scheduler-card-actions ${options.compact ? 'compact' : ''}">
         <a class="button button-small button-ghost" href="${buildJobUrl(job.id, location.pathname, location.search)}">Open</a>
+        <a class="button button-small button-ghost" href="${buildCustomerUrl(job.customer?.id, location.pathname, location.search)}">Customer</a>
         <button class="button button-small" data-action="schedule" data-job-id="${job.id}">${job.scheduleState === 'scheduled' ? 'Reschedule' : 'Schedule'}</button>
         <button class="button button-small" data-action="assign" data-job-id="${job.id}">${job.assigneeTeamMemberId ? 'Reassign' : 'Assign'}</button>
         ${job.assigneeTeamMemberId ? `<button class="button button-small button-ghost" data-action="unassign" data-job-id="${job.id}">Set unassigned</button>` : ''}
-        <button class="button button-small button-danger" data-action="unschedule" data-job-id="${job.id}">Undo schedule</button>
+        ${job.scheduleState === 'scheduled' ? `<button class="button button-small button-danger" data-action="unschedule" data-job-id="${job.id}">Unschedule</button>` : ''}
       </div>
     </article>
   `;
@@ -978,11 +1099,16 @@ function openTeamModal(job) {
     body: `
       <form id="team-job-form" class="stack-gap modal-form">
         <label>
+          <span>Find team member</span>
+          <input id="team-member-search" placeholder="Search active team members" />
+        </label>
+        <label>
           <span>Active team member</span>
-          <select name="teamMemberId">
+          <select name="teamMemberId" id="team-member-select">
             ${state.teamMembers.map((member) => `<option value="${member.id}" ${job.assigneeTeamMemberId === member.id ? 'selected' : ''}>${escapeHtml(member.displayName)}</option>`).join('')}
           </select>
         </label>
+        <div class="table-meta">Only active team members are available in V1. Use Set unassigned to move this job back to the Unassigned lane.</div>
         <div id="team-job-status"></div>
         <div class="modal-actions split-actions">
           <div class="inline-actions">
@@ -995,6 +1121,19 @@ function openTeamModal(job) {
         </div>
       </form>
     `,
+  });
+
+  const searchInput = document.getElementById('team-member-search');
+  const select = document.getElementById('team-member-select');
+  searchInput.addEventListener('input', () => {
+    const query = searchInput.value.trim().toLowerCase();
+    for (const option of select.options) {
+      option.hidden = query ? !option.textContent.toLowerCase().includes(query) : false;
+    }
+    const firstVisible = [...select.options].find((option) => !option.hidden);
+    if (firstVisible && select.options[select.selectedIndex]?.hidden) {
+      select.value = firstVisible.value;
+    }
   });
 
   document.getElementById('close-modal-button').addEventListener('click', closeModal);
@@ -1140,6 +1279,14 @@ function showTransientPageNotice(message, tone = 'info') {
 
 function renderFatal(error) {
   app.innerHTML = `<div class="surface-card"><h1>Something went wrong</h1><pre>${escapeHtml(error.message)}</pre></div>`;
+}
+
+function formatDurationMinutes(startAt, endAt) {
+  const minutes = Math.round((new Date(endAt).getTime() - new Date(startAt).getTime()) / 60000);
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return remainder ? `${hours}h ${remainder}m` : `${hours}h`;
 }
 
 function capitalize(value) {

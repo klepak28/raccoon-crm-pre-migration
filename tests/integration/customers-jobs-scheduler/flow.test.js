@@ -239,6 +239,78 @@ test('schedule range query supports calendar views across multiple days', async 
   });
 });
 
+test('operational job list supports unscheduled queue and preserves assignee after unschedule', async () => {
+  const context = createContext();
+  const app = createApp({ staticRoot, context });
+
+  await withServer(app, async (baseUrl) => {
+    const customerResponse = await fetch(`${baseUrl}/api/customers`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        displayName: 'Queue Customer',
+        customerType: 'Homeowner',
+        street: '1 Main',
+        city: 'Austin',
+        state: 'TX',
+        zip: '73301',
+      }),
+    });
+    const customerPayload = await customerResponse.json();
+    const customerId = customerPayload.item.id;
+    const addressId = customerPayload.item.addresses[0].id;
+
+    const jobResponse = await fetch(`${baseUrl}/api/customers/${customerId}/jobs`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        titleOrServiceSummary: 'Queue visit',
+        customerAddressId: addressId,
+      }),
+    });
+    const jobPayload = await jobResponse.json();
+    const jobId = jobPayload.item.id;
+
+    await fetch(`${baseUrl}/api/jobs/${jobId}/assign`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ teamMemberId: 'tm_0001' }),
+    });
+
+    let unscheduledResponse = await fetch(`${baseUrl}/api/jobs?scheduleState=unscheduled`);
+    let unscheduledPayload = await unscheduledResponse.json();
+    assert.equal(unscheduledResponse.status, 200);
+    assert.equal(unscheduledPayload.items.some((item) => item.id === jobId), true);
+    assert.equal(unscheduledPayload.items.find((item) => item.id === jobId).assignee.displayName, 'Team 1');
+
+    await fetch(`${baseUrl}/api/jobs/${jobId}/schedule`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        scheduledStartAt: '2026-04-15T09:00:00.000Z',
+        scheduledEndAt: '2026-04-15T10:00:00.000Z',
+      }),
+    });
+
+    await fetch(`${baseUrl}/api/jobs/${jobId}/unschedule`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+
+    const detailResponse = await fetch(`${baseUrl}/api/jobs/${jobId}`);
+    const detailPayload = await detailResponse.json();
+    assert.equal(detailPayload.item.scheduleState, 'unscheduled');
+    assert.equal(detailPayload.item.assignee.displayName, 'Team 1');
+
+    unscheduledResponse = await fetch(`${baseUrl}/api/jobs?scheduleState=unscheduled`);
+    unscheduledPayload = await unscheduledResponse.json();
+    const queuedJob = unscheduledPayload.items.find((item) => item.id === jobId);
+    assert.equal(queuedJob.customer.displayName, 'Queue Customer');
+    assert.equal(queuedJob.assignee.displayName, 'Team 1');
+  });
+});
+
 test('unsupported recurrence and invoice fields are rejected explicitly', async () => {
   const context = createContext();
   const app = createApp({ staticRoot, context });

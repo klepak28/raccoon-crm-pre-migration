@@ -86,6 +86,16 @@ export async function handleRoute({ req, res, url, context }) {
     return true;
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/jobs') {
+    sendJson(res, 200, {
+      items: services.jobs.listJobs({
+        scheduleState: url.searchParams.get('scheduleState') || null,
+        customerId: url.searchParams.get('customerId') || null,
+      }),
+    });
+    return true;
+  }
+
   const jobParams = matchRoute(req.method, url.pathname, '/api/jobs/:jobId');
   if (jobParams && req.method === 'GET') {
     sendJson(res, 200, { item: services.jobs.getJobDetail(jobParams.jobId) });

@@ -50,6 +50,31 @@ test('unschedule clears schedule fields and preserves assignee', () => {
   assert.equal(updated.assigneeTeamMemberId, 'tm_0001');
 });
 
+test('lists operational job summaries for unscheduled queue', () => {
+  const context = createContext();
+  const customer = createCustomer(context, {
+    displayName: 'Queue Customer',
+    mobilePhone: '555-111-2222',
+    tags: ['vip'],
+  });
+  const job = context.services.jobs.createOneTimeJob(customer.id, validateJobInput({
+    titleOrServiceSummary: 'Queue task',
+    customerAddressId: customer.addresses[0].id,
+    tags: ['electrical'],
+  }));
+
+  context.services.jobs.assignJob(job.id, 'tm_0002');
+
+  const items = context.services.jobs.listJobs({ scheduleState: 'unscheduled' });
+  const queuedJob = items.find((item) => item.id === job.id);
+
+  assert.equal(queuedJob.customer.displayName, 'Queue Customer');
+  assert.equal(queuedJob.customer.primaryPhone, '555-111-2222');
+  assert.deepEqual(queuedJob.customer.tags, ['vip']);
+  assert.deepEqual(queuedJob.tags, ['electrical']);
+  assert.equal(queuedJob.assignee.displayName, 'Team 2');
+});
+
 test('rejects inactive assignee', () => {
   const context = createContext();
   const customer = createCustomer(context);

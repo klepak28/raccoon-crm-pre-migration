@@ -1,6 +1,6 @@
 import { httpError } from '../../lib/http.js';
 
-export function createCustomerServices({ customerRepository, jobRepository }) {
+export function createCustomerServices({ customerRepository, jobRepository, teamMemberRepository }) {
   return {
     createCustomer(input) {
       return customerRepository.create(input);
@@ -23,15 +23,30 @@ export function createCustomerServices({ customerRepository, jobRepository }) {
       if (!customer) {
         throw httpError(404, 'CUSTOMER_NOT_FOUND', 'Customer not found');
       }
-      const jobs = jobRepository.listByCustomerId(customerId).map((job) => ({
-        id: job.id,
-        jobNumber: job.jobNumber,
-        titleOrServiceSummary: job.titleOrServiceSummary,
-        scheduleState: job.scheduleState,
-        scheduledStartAt: job.scheduledStartAt,
-        scheduledEndAt: job.scheduledEndAt,
-        assigneeTeamMemberId: job.assigneeTeamMemberId,
-      }));
+      const jobs = jobRepository
+        .listByCustomerId(customerId)
+        .sort((left, right) => {
+          if (left.scheduleState !== right.scheduleState) {
+            return left.scheduleState === 'scheduled' ? -1 : 1;
+          }
+          if (left.scheduleState === 'scheduled') {
+            return new Date(left.scheduledStartAt).getTime() - new Date(right.scheduledStartAt).getTime();
+          }
+          return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+        })
+        .map((job) => ({
+          id: job.id,
+          jobNumber: job.jobNumber,
+          titleOrServiceSummary: job.titleOrServiceSummary,
+          scheduleState: job.scheduleState,
+          scheduledStartAt: job.scheduledStartAt,
+          scheduledEndAt: job.scheduledEndAt,
+          assigneeTeamMemberId: job.assigneeTeamMemberId,
+          assigneeDisplayName: job.assigneeTeamMemberId
+            ? teamMemberRepository.getById(job.assigneeTeamMemberId)?.displayName || job.assigneeTeamMemberId
+            : null,
+          address: customer.addresses.find((item) => item.id === job.customerAddressId) || null,
+        }));
       return { ...customer, jobs };
     },
     // patch contains only the fields explicitly provided in the request body.

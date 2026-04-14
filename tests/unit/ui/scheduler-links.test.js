@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  buildCustomerUrl,
   buildDayUrl,
   buildJobUrl,
   buildSchedulerUrl,
@@ -33,6 +34,13 @@ test('getActiveSchedulerReturnTo preserves scheduler context when already on sch
   assert.equal(
     getActiveSchedulerReturnTo('/app/calendar_new', '?view=week&date=2026-04-13&filter=vip'),
     '/app/calendar_new?view=week&date=2026-04-13&filter=vip',
+  );
+});
+
+test('buildCustomerUrl carries scheduler return context into customer links', () => {
+  assert.equal(
+    buildCustomerUrl('cust_123', '/app/calendar_new', '?view=month&date=2026-04-13&filter=vip'),
+    '/app/customers/cust_123?returnTo=%2Fapp%2Fcalendar_new%3Fview%3Dmonth%26date%3D2026-04-13%26filter%3Dvip',
   );
 });
 

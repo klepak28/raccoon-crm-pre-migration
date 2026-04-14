@@ -20,6 +20,11 @@ export function getActiveSchedulerReturnTo(pathname = '', search = '') {
   return getSchedulerContext(search);
 }
 
+export function buildCustomerUrl(customerId, pathname = '', search = '') {
+  const schedulerQuery = getActiveSchedulerReturnTo(pathname, search);
+  return `/app/customers/${customerId}${schedulerQuery ? `?returnTo=${encodeURIComponent(schedulerQuery)}` : ''}`;
+}
+
 export function buildJobUrl(jobId, pathname = '', search = '') {
   const schedulerQuery = getActiveSchedulerReturnTo(pathname, search);
   return `/app/jobs/${jobId}${schedulerQuery ? `?returnTo=${encodeURIComponent(schedulerQuery)}` : ''}`;

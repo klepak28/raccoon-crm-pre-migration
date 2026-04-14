@@ -23,6 +23,13 @@ export async function sendJson(url, payload, method = 'POST') {
 export const api = {
   listTeamMembers: async () => (await getJson('/api/team-members')).items,
   listCustomers: async () => (await getJson('/api/customers')).items,
+  listJobs: async (filters = {}) => {
+    const params = new URLSearchParams();
+    if (filters.scheduleState) params.set('scheduleState', filters.scheduleState);
+    if (filters.customerId) params.set('customerId', filters.customerId);
+    const query = params.toString();
+    return (await getJson(`/api/jobs${query ? `?${query}` : ''}`)).items;
+  },
   getCustomer: async (customerId) => (await getJson(`/api/customers/${customerId}`)).item,
   createCustomer: async (payload) => (await sendJson('/api/customers', payload)).item,
   updateCustomer: async (customerId, payload) => (await sendJson(`/api/customers/${customerId}`, payload, 'PATCH')).item,

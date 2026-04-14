@@ -19,7 +19,7 @@ export function createContext() {
       teamMemberRepository,
     },
     services: {
-      customers: createCustomerServices({ customerRepository, jobRepository }),
+      customers: createCustomerServices({ customerRepository, jobRepository, teamMemberRepository }),
       jobs: createJobServices({ customerRepository, jobRepository, teamMemberRepository }),
       scheduler: createSchedulerServices({ jobRepository, customerRepository, teamMemberRepository }),
       teamMembers: {
