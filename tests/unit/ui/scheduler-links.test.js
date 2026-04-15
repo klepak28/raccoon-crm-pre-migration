@@ -25,10 +25,24 @@ test('buildSchedulerUrl preserves repeated lane filters', () => {
   );
 });
 
+test('buildSchedulerUrl preserves day scale when provided', () => {
+  assert.equal(
+    buildSchedulerUrl({ view: 'day', date: '2026-04-14', scale: '10' }),
+    '/app/calendar_new?view=day&date=2026-04-14&scale=10',
+  );
+});
+
 test('buildDayUrl creates a focused day route', () => {
   assert.equal(
     buildDayUrl('2026-04-15', 'vip', ['tm_0001']),
     '/app/calendar_new?view=day&date=2026-04-15&filter=vip&lane=tm_0001',
+  );
+});
+
+test('buildDayUrl carries scale for focused day route', () => {
+  assert.equal(
+    buildDayUrl('2026-04-15', 'vip', ['tm_0001'], '15'),
+    '/app/calendar_new?view=day&date=2026-04-15&filter=vip&scale=15&lane=tm_0001',
   );
 });
 
