@@ -1720,26 +1720,11 @@ async function renderSchedulerPage() {
               </form>
             </div>
             <div class="rail-card stack-gap">
-              <h2 class="section-title">Range</h2>
-              ${renderRangeGuide(view, date, filteredSchedule, filter, selectedLaneIds, scale)}
-            </div>
-            <div class="rail-card stack-gap">
               <h2 class="section-title">Needs scheduling</h2>
               ${renderSchedulerBacklog(filteredUnscheduledJobs, {
                 emptyTitle: 'No unscheduled jobs',
                 emptyBody: filter ? 'Nothing in the unscheduled queue matches this filter.' : 'Every current V1 job has a schedule.',
                 actionLabel: 'Schedule',
-              })}
-            </div>
-            <div class="rail-card stack-gap">
-              <h2 class="section-title">Needs assignment in range</h2>
-              ${renderSchedulerBacklog(filteredSchedule.jobs.filter((job) => !job.assigneeTeamMemberId), {
-                emptyTitle: 'No unassigned scheduled jobs',
-                emptyBody: filter ? 'Nothing in this range matches the filter.' : 'All scheduled jobs in range already have a team.',
-                actionLabel: 'Assign',
-                sourceView: view,
-                sourceDate: date,
-                sourceFilter: filter,
               })}
             </div>
           </aside>
