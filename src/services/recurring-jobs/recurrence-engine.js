@@ -260,13 +260,40 @@ function* generateYearlyOrdinal(rule, anchor, interval) {
 
 /**
  * Compute the materialization horizon date from now.
+ *
+ * V1 keeps recurring jobs as concrete materialized Job rows, so we need a finite
+ * generation horizon. For rules that truly end, we can generate through that end.
+ * For "never", keep a much longer practical horizon so the series does not appear
+ * to stop after ~1 year in the UI.
  */
-export function computeHorizonDate(frequency) {
+export function computeHorizonDate(ruleOrFrequency) {
   const now = new Date();
-  if (frequency === 'yearly') {
+  const rule = typeof ruleOrFrequency === 'string'
+    ? { recurrenceFrequency: ruleOrFrequency }
+    : (ruleOrFrequency || {});
+
+  if (rule.recurrenceEndMode === 'on_date' && rule.recurrenceEndDate) {
+    return new Date(`${rule.recurrenceEndDate}T23:59:59.999`);
+  }
+
+  if (rule.recurrenceEndMode === 'never') {
+    switch (rule.recurrenceFrequency) {
+      case 'daily':
+        return new Date(now.getFullYear() + 3, now.getMonth(), now.getDate());
+      case 'weekly':
+      case 'monthly':
+        return new Date(now.getFullYear() + 20, now.getMonth(), now.getDate());
+      case 'yearly':
+        return new Date(now.getFullYear() + 50, now.getMonth(), now.getDate());
+      default:
+        return new Date(now.getFullYear() + 10, now.getMonth(), now.getDate());
+    }
+  }
+
+  if (rule.recurrenceFrequency === 'yearly') {
     return new Date(now.getFullYear() + 5, now.getMonth(), now.getDate());
   }
-  // daily, weekly, monthly: 1 year
+
   return new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
 }
 

@@ -263,6 +263,25 @@ test('monthly fifth weekday pattern skips months without that weekday position',
   ]);
 });
 
+test('weekly never-ending recurrence is not truncated after roughly one year', () => {
+  const context = createContext();
+  const customer = createCustomer(context);
+  const scheduledJob = createScheduledJob(context, customer);
+
+  const { series } = context.services.recurringJobs.createRecurringSeries(
+    scheduledJob.id,
+    validateRecurrenceInput({
+      recurrenceFrequency: 'weekly',
+      recurrenceInterval: 1,
+      recurrenceDayOfWeek: ['FRI'],
+      recurrenceEndMode: 'never',
+    }),
+  );
+
+  const starts = context.services.recurringJobs.getSeriesDetail(series.id).occurrences.map((item) => item.scheduledStartAt.slice(0, 10));
+  assert.equal(starts.some((value) => value >= '2027-04-16'), true);
+});
+
 test('moving recurrence end date backward truncates future occurrences after the new boundary', () => {
   const context = createContext();
   const customer = createCustomer(context);

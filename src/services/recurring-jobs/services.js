@@ -342,7 +342,7 @@ export function createRecurringJobServices({
     const anchorEndAt = pivotJob.scheduledEndAt;
     const anchorDate = new Date(anchorStartAt);
     const durationMs = new Date(anchorEndAt).getTime() - new Date(anchorStartAt).getTime();
-    const horizon = computeHorizonDate(series.recurrenceFrequency);
+    const horizon = computeHorizonDate(series);
     const dates = generateOccurrenceDates(series, anchorDate, 1000, horizon, 1);
     const generatedJobs = [];
     let occurrenceIndex = startingOccurrenceIndex;
@@ -382,7 +382,7 @@ export function createRecurringJobServices({
 
   function updateSeriesHorizon(seriesId) {
     const series = requireSeries(seriesId);
-    const horizon = computeHorizonDate(series.recurrenceFrequency);
+    const horizon = computeHorizonDate(series);
     recurringSeriesRepository.update(seriesId, (item) => {
       item.materializationHorizonUntil = horizon.toISOString();
       item.lastExtendedAt = new Date().toISOString();

@@ -1796,7 +1796,7 @@ function renderSchedulerView({ view, date, schedule, filter, lanes = [] }) {
 function renderDaySchedulerView(date, schedule, filter, lanes = []) {
   const visibleHours = Array.from({ length: 11 }, (_, index) => index + 7);
   const slotMinutes = 15;
-  const slotHeight = 28;
+  const slotHeight = 24;
   const startHour = visibleHours[0];
   const totalMinutes = visibleHours.length * 60;
   const laneJobs = new Map(schedule.lanes.map((lane) => [lane.id, []]));
@@ -1859,7 +1859,9 @@ function renderDaySchedulerView(date, schedule, filter, lanes = []) {
                       data-slot-hour="${slot.hour}"
                       data-slot-minute="${slot.minute}"
                       data-slot-lane-id="${escapeHtml(lane.id)}"
-                    >${slot.minute === 0 ? 'Create new job' : ''}</button>
+                      aria-label="Create new job"
+                      title="Create new job"
+                    ></button>
                   `).join('')}
                 </div>
                 <div class="calendar-events-layer">
@@ -2262,21 +2264,53 @@ async function moveJobToCalendarSlot({ jobId, date, hour, minute = 0, laneId }) 
   const durationMinutes = Math.max(15, getJobDurationMinutes(job));
   const startLocal = `${date}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
   const endLocal = addMinutesToLocalDateTime(startLocal, durationMinutes);
+  const scheduledStartAt = toIso(startLocal);
+  const scheduledEndAt = toIso(endLocal);
+  const nextAssigneeTeamMemberId = laneId === 'unassigned' ? null : (laneId || null);
+  const hasScheduleChange = job.scheduledStartAt !== scheduledStartAt || job.scheduledEndAt !== scheduledEndAt;
+  const hasAssignmentChange = (job.assigneeTeamMemberId || null) !== nextAssigneeTeamMemberId;
 
-  await api.scheduleJob(jobId, {
-    scheduledStartAt: toIso(startLocal),
-    scheduledEndAt: toIso(endLocal),
-  });
+  if (!hasScheduleChange && !hasAssignmentChange) return;
 
-  if (laneId === 'unassigned') {
+  if (job.recurringSeriesId) {
+    const scope = await chooseRecurringEditScope({
+      title: 'Move recurring job',
+      message: 'This job is part of a recurring series. Apply the drag-and-drop move only to this job or to this job and all future jobs?',
+      allowThisScope: true,
+    });
+    if (!scope) return;
+
+    const changes = {};
+    if (hasScheduleChange) {
+      changes.scheduledStartAt = scheduledStartAt;
+      changes.scheduledEndAt = scheduledEndAt;
+    }
+    if (hasAssignmentChange) {
+      changes.assigneeTeamMemberId = nextAssigneeTeamMemberId;
+    }
+
+    await api.editOccurrence(jobId, scope, changes);
+    setFlash(
+      scope === 'this'
+        ? `Recurring job moved for ${shortDayLabel(date)} at ${formatTime(scheduledStartAt)}.`
+        : `Recurring job moved for this and future occurrences from ${shortDayLabel(date)} at ${formatTime(scheduledStartAt)}.`,
+      'success',
+    );
+    await renderRoute();
+    return;
+  }
+
+  await api.scheduleJob(jobId, { scheduledStartAt, scheduledEndAt });
+
+  if (nextAssigneeTeamMemberId === null) {
     if (job.assigneeTeamMemberId) {
       await api.unassignJob(jobId);
     }
-  } else if (laneId) {
-    await api.assignJob(jobId, laneId);
+  } else {
+    await api.assignJob(jobId, nextAssigneeTeamMemberId);
   }
 
-  setFlash(`Job moved to ${shortDayLabel(date)} at ${formatTime(toIso(startLocal))}.`, 'success');
+  setFlash(`Job moved to ${shortDayLabel(date)} at ${formatTime(scheduledStartAt)}.`, 'success');
   await renderRoute();
 }
 
@@ -2772,13 +2806,12 @@ function compareJobs(left, right) {
 
 function renderDayEventCard(job, { startHour, slotHeight, totalMinutes }) {
   const recurringIcon = job.isRecurring ? '<span class="recurring-icon" title="Recurring">&#x1f501;</span>' : '';
-  const start = new Date(job.scheduledStartAt);
-  const end = new Date(job.scheduledEndAt);
-  const minutesFromStart = Math.max(0, ((start.getHours() - startHour) * 60) + start.getMinutes());
-  const durationMinutes = Math.max(15, Math.round((end.getTime() - start.getTime()) / 60000));
+  const startParts = localTimePartsFromIso(job.scheduledStartAt);
+  const minutesFromStart = Math.max(0, ((startParts.hour - startHour) * 60) + startParts.minute);
+  const durationMinutes = Math.max(15, getJobDurationMinutes(job));
   const top = (minutesFromStart / 15) * slotHeight;
   const height = Math.max(slotHeight, (durationMinutes / 15) * slotHeight);
-  const clampedHeight = Math.min(height, ((totalMinutes - minutesFromStart) / 15) * slotHeight);
+  const clampedHeight = Math.max(slotHeight, Math.min(height, ((totalMinutes - minutesFromStart) / 15) * slotHeight));
   return `
     <a class="calendar-event draggable-job ${!job.assigneeTeamMemberId ? 'is-unassigned' : ''}" draggable="true" data-calendar-job-id="${job.id}" ${colorStyleAttr(job.assignmentColor, '--team-color')} href="${buildJobUrl(job.id, location.pathname, location.search)}" style="top:${top}px;height:${clampedHeight}px;">
       <div class="calendar-event-time">${escapeHtml(formatTime(job.scheduledStartAt))} to ${escapeHtml(formatTime(job.scheduledEndAt))} ${recurringIcon}</div>
@@ -2814,16 +2847,23 @@ function colorStyleAttr(color, variableName = '--team-color') {
   return `style="${variableName}:${safeColor}"`;
 }
 
-function renderCurrentTimeLine(date, visibleHours, laneCount, slotHeight = 28) {
+function renderCurrentTimeLine(date, visibleHours, laneCount, slotHeight = 24) {
   if (date !== localToday()) return '';
   const now = new Date();
   const startHour = visibleHours[0];
   const endHour = visibleHours[visibleHours.length - 1] + 1;
   const hourValue = now.getHours() + (now.getMinutes() / 60);
   if (hourValue < startHour || hourValue > endHour) return '';
-  const headerHeight = 72;
+  const headerHeight = 60;
   const top = headerHeight + (((hourValue - startHour) * 60) / 15) * slotHeight;
-  return `<div class="calendar-now-line" style="top:${top}px; left:88px; width:calc(100% - 88px);"><span class="calendar-now-dot"></span></div>`;
+  return `<div class="calendar-now-line" style="top:${top}px; left:76px; width:calc(100% - 76px);"><span class="calendar-now-dot"></span></div>`;
+}
+
+function localTimePartsFromIso(iso) {
+  const local = toDateTimeLocal(iso);
+  const timePart = local.split('T')[1] || '00:00';
+  const [hour, minute] = timePart.split(':').map((value) => Number(value || 0));
+  return { hour, minute };
 }
 
 function deriveInitials(displayName) {
