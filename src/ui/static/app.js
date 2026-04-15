@@ -1684,7 +1684,7 @@ async function renderSchedulerPage() {
         <div class="scheduler-toolbar-shell scheduler-toolbar-shell-compact scheduler-toolbar-shell-navsplit">
           <div class="scheduler-date-nav-wrap">
             <a class="icon-button scheduler-nav-arrow" href="${buildSchedulerUrl({ view, date: stepAnchorDay(view, date, -1), filter, lanes: selectedLaneIds, scale })}" aria-label="Previous">&#x2039;</a>
-            <button type="button" class="scheduler-date-trigger" id="scheduler-date-trigger">${escapeHtml(formatCompactDayLabel(date))}</button>
+            <button type="button" class="scheduler-date-trigger" id="scheduler-date-trigger">${escapeHtml(view === 'month' ? formatRangeLabel('month', date) : formatCompactDayLabel(date))}</button>
             <a class="icon-button scheduler-nav-arrow" href="${buildSchedulerUrl({ view, date: stepAnchorDay(view, date, 1), filter, lanes: selectedLaneIds, scale })}" aria-label="Next">&#x203A;</a>
             <input id="scheduler-date-picker" class="scheduler-date-picker" type="date" value="${escapeHtml(date)}" aria-label="Focus date" />
           </div>
