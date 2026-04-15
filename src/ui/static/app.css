@@ -730,32 +730,20 @@ button {
 
 .scheduler-toolbar-shell {
   display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 16px;
+  grid-template-columns: 1fr;
+  gap: 12px;
   align-items: center;
-  padding: 12px 14px;
+  padding: 10px 12px;
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: 16px;
   background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
 }
 
-.scheduler-toolbar-left,
-.scheduler-toolbar-center,
-.scheduler-toolbar-right {
-  justify-content: center;
-}
-
-.scheduler-toolbar-left {
-  justify-content: flex-start;
-}
-
-.scheduler-toolbar-right {
-  justify-content: flex-end;
-}
-
-.scheduler-date-pill {
+.scheduler-date-pill,
+.scheduler-date-trigger {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   min-height: 42px;
   padding: 0 16px;
   border-radius: 999px;
@@ -765,31 +753,43 @@ button {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
-.scheduler-view-form select {
-  min-width: 120px;
-}
-
-.scheduler-date-jump {
-  align-items: center;
+.scheduler-date-trigger {
+  min-width: 240px;
+  cursor: pointer;
+  font-size: 13px;
 }
 
 .scheduler-toolbar-shell-compact {
   padding-bottom: 2px;
 }
 
-.scheduler-toolbar-shell-compact .scheduler-toolbar-left,
-.scheduler-toolbar-shell-compact .scheduler-toolbar-right {
+.scheduler-toolbar-shell-navonly {
+  justify-items: center;
+}
+
+.scheduler-date-nav-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
   gap: 8px;
 }
 
-.scheduler-toolbar-shell-compact .scheduler-date-pill {
-  padding: 0 12px;
+.scheduler-nav-arrow {
+  width: 34px;
+  min-width: 34px;
   height: 34px;
-  font-size: 13px;
+  padding: 0;
+  font-size: 20px;
+  line-height: 1;
 }
 
-.scheduler-toolbar-shell-compact .scheduler-date-jump input[type="date"] {
-  min-height: 34px;
+.scheduler-date-picker {
+  position: absolute;
+  inset: auto 0 auto auto;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .scheduler-surface {

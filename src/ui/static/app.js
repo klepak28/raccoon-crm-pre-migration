@@ -1631,20 +1631,12 @@ async function renderSchedulerPage() {
     `,
     content: `
       <section class="surface-card stack-gap-lg scheduler-surface">
-        <div class="scheduler-toolbar-shell scheduler-toolbar-shell-compact">
-          <div class="inline-actions scheduler-toolbar-left">
-            <a class="button" href="${buildSchedulerUrl({ view, date: localToday(), filter, lanes: selectedLaneIds, scale })}">Today</a>
-            <a class="button button-ghost" href="${buildSchedulerUrl({ view, date: stepAnchorDay(view, date, -1), filter, lanes: selectedLaneIds, scale })}">Previous</a>
-            <a class="button button-ghost" href="${buildSchedulerUrl({ view, date: stepAnchorDay(view, date, 1), filter, lanes: selectedLaneIds, scale })}">Next</a>
-          </div>
-          <div class="inline-actions scheduler-toolbar-right">
-            <div class="scheduler-date-pill">${escapeHtml(formatRangeLabel(view === 'month' ? 'month' : 'day', date))}</div>
-            <form id="scheduler-jump-form" class="inline-actions compact-form scheduler-date-jump">
-              <input type="date" name="date" value="${escapeHtml(date)}" aria-label="Focus date" />
-              <input type="hidden" name="view" value="${escapeHtml(view)}" />
-              <input type="hidden" name="filter" value="${escapeHtml(filter)}" />
-              <button class="button button-primary" type="submit">Go</button>
-            </form>
+        <div class="scheduler-toolbar-shell scheduler-toolbar-shell-compact scheduler-toolbar-shell-navonly">
+          <div class="scheduler-date-nav-wrap">
+            <a class="icon-button scheduler-nav-arrow" href="${buildSchedulerUrl({ view, date: stepAnchorDay(view, date, -1), filter, lanes: selectedLaneIds, scale })}" aria-label="Previous">&#x2039;</a>
+            <button type="button" class="scheduler-date-trigger" id="scheduler-date-trigger">${escapeHtml(formatRangeLabel(view === 'day' ? 'day' : view, date))}</button>
+            <a class="icon-button scheduler-nav-arrow" href="${buildSchedulerUrl({ view, date: stepAnchorDay(view, date, 1), filter, lanes: selectedLaneIds, scale })}" aria-label="Next">&#x203A;</a>
+            <input id="scheduler-date-picker" class="scheduler-date-picker" type="date" value="${escapeHtml(date)}" aria-label="Focus date" />
           </div>
         </div>
         <div class="scheduler-layout">
@@ -1707,10 +1699,21 @@ async function renderSchedulerPage() {
     `,
   });
 
-  document.getElementById('scheduler-jump-form').addEventListener('submit', (event) => {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    location.href = buildSchedulerUrl({ view: form.get('view'), date: form.get('date'), filter: form.get('filter'), lanes: selectedLaneIds, scale });
+  document.getElementById('scheduler-date-trigger')?.addEventListener('click', () => {
+    const picker = document.getElementById('scheduler-date-picker');
+    if (!picker) return;
+    if (typeof picker.showPicker === 'function') {
+      picker.showPicker();
+      return;
+    }
+    picker.focus();
+    picker.click();
+  });
+
+  document.getElementById('scheduler-date-picker')?.addEventListener('change', (event) => {
+    const nextDate = event.currentTarget.value;
+    if (!nextDate) return;
+    location.href = buildSchedulerUrl({ view, date: nextDate, filter, lanes: selectedLaneIds, scale });
   });
 
   document.getElementById('scheduler-filter-form').addEventListener('submit', (event) => {
