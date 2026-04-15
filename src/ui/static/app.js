@@ -1860,6 +1860,7 @@ function renderDaySchedulerView(date, schedule, filter, lanes = [], scale = '15'
 
           ${schedule.lanes.map((lane) => {
             const jobs = (laneJobs.get(lane.id) || []).sort(compareJobs);
+            const eventLayouts = buildDayLaneEventLayouts(jobs, { visibleStartMinute: startHour * 60, visibleEndMinute: (visibleHours.at(-1) + 1) * 60 });
             return `
               <div class="calendar-day-column ${lane.id === 'unassigned' ? 'is-unassigned' : ''}" style="--slot-height:${slotHeight}px; --day-height:${quarterSlots.length * slotHeight}px;" data-day-column-lane-id="${escapeHtml(lane.id)}">
                 <div class="calendar-slot-grid" style="grid-template-rows: repeat(${quarterSlots.length}, ${slotHeight}px);">
@@ -1879,7 +1880,7 @@ function renderDaySchedulerView(date, schedule, filter, lanes = [], scale = '15'
                   `).join('')}
                 </div>
                 <div class="calendar-events-layer">
-                  ${jobs.map((job) => renderDayEventCard(job, { startHour, slotHeight, slotMinutes, totalMinutes })).join('')}
+                  ${jobs.map((job) => renderDayEventCard(job, { startHour, slotHeight, slotMinutes, totalMinutes, layout: eventLayouts.get(job.id) })).join('')}
                 </div>
               </div>
             `;
@@ -2818,7 +2819,7 @@ function compareJobs(left, right) {
   return new Date(left.scheduledStartAt).getTime() - new Date(right.scheduledStartAt).getTime();
 }
 
-function renderDayEventCard(job, { startHour, slotHeight, slotMinutes, totalMinutes }) {
+function renderDayEventCard(job, { startHour, slotHeight, slotMinutes, totalMinutes, layout = null }) {
   const recurringIcon = job.isRecurring ? '<span class="recurring-icon" title="Recurring">&#x1f501;</span>' : '';
   const startParts = localDateTimePartsFromIso(job.scheduledStartAt);
   const minutesFromStart = Math.max(0, ((startParts.hour - startHour) * 60) + startParts.minute);
@@ -2826,10 +2827,14 @@ function renderDayEventCard(job, { startHour, slotHeight, slotMinutes, totalMinu
   const top = (minutesFromStart / slotMinutes) * slotHeight;
   const height = Math.max(slotHeight, (durationMinutes / slotMinutes) * slotHeight);
   const clampedHeight = Math.max(slotHeight, Math.min(height, ((totalMinutes - minutesFromStart) / slotMinutes) * slotHeight));
+  const widthPercent = layout?.totalColumns > 1 ? 100 / layout.totalColumns : null;
   const styleAttr = buildStyleAttr([
     colorStyleDeclaration(job.assignmentColor, '--team-color'),
     `top:${top}px`,
     `height:${clampedHeight}px`,
+    widthPercent ? `left:calc(${(layout.columnIndex || 0) * widthPercent}% + 6px)` : '',
+    widthPercent ? `width:calc(${widthPercent}% - 8px)` : '',
+    widthPercent ? 'right:auto' : '',
   ]);
   return `
     <a class="calendar-event draggable-job ${!job.assigneeTeamMemberId ? 'is-unassigned' : ''}" draggable="true" data-calendar-job-id="${job.id}" ${styleAttr} href="${buildJobUrl(job.id, location.pathname, location.search)}">
@@ -2921,6 +2926,69 @@ function getLocalDurationMinutes(startIso, endIso) {
   const minuteDelta = ((end.hour * 60) + end.minute) - ((start.hour * 60) + start.minute);
   const total = dayOffsetMinutes + minuteDelta;
   return Number.isFinite(total) && total > 0 ? total : getJobDurationMinutes({ scheduledStartAt: startIso, scheduledEndAt: endIso });
+}
+
+function getLocalMinutesSinceMidnight(iso) {
+  const parts = localDateTimePartsFromIso(iso);
+  return (parts.hour * 60) + parts.minute;
+}
+
+function buildDayLaneEventLayouts(jobs, { visibleStartMinute, visibleEndMinute }) {
+  const intervals = jobs.map((job) => {
+    const actualStartMinute = getLocalMinutesSinceMidnight(job.scheduledStartAt);
+    const actualEndMinute = actualStartMinute + getLocalDurationMinutes(job.scheduledStartAt, job.scheduledEndAt);
+    const startMinute = Math.max(visibleStartMinute, actualStartMinute);
+    const endMinute = Math.min(visibleEndMinute, actualEndMinute);
+    return {
+      jobId: job.id,
+      startMinute,
+      endMinute: Math.max(startMinute + 1, endMinute),
+    };
+  }).sort((left, right) => left.startMinute - right.startMinute || left.endMinute - right.endMinute);
+
+  const layouts = new Map();
+  let cluster = [];
+  let clusterEnd = -Infinity;
+
+  for (const interval of intervals) {
+    if (cluster.length && interval.startMinute >= clusterEnd) {
+      flushOverlapCluster(cluster, layouts);
+      cluster = [];
+      clusterEnd = -Infinity;
+    }
+    cluster.push(interval);
+    clusterEnd = Math.max(clusterEnd, interval.endMinute);
+  }
+
+  if (cluster.length) {
+    flushOverlapCluster(cluster, layouts);
+  }
+
+  return layouts;
+}
+
+function flushOverlapCluster(cluster, layouts) {
+  const columns = [];
+  let maxColumns = 0;
+
+  for (const interval of cluster) {
+    let columnIndex = columns.findIndex((endMinute) => endMinute <= interval.startMinute);
+    if (columnIndex === -1) {
+      columnIndex = columns.length;
+      columns.push(interval.endMinute);
+    } else {
+      columns[columnIndex] = interval.endMinute;
+    }
+    interval.columnIndex = columnIndex;
+    maxColumns = Math.max(maxColumns, columns.length);
+  }
+
+  for (const interval of cluster) {
+    layouts.set(interval.jobId, {
+      columnIndex: interval.columnIndex,
+      totalColumns: maxColumns,
+    });
+  }
 }
 
 function deriveInitials(displayName) {
