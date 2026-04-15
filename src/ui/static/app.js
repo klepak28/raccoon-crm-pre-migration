@@ -897,23 +897,20 @@ async function renderNewJobPage() {
                     </div>
                   </div>
                 </div>
-                <fieldset class="stack-gap-sm recurrence-ends-fieldset">
+                <fieldset class="recurrence-ends-fieldset">
                   <legend>Ends</legend>
-                  <label class="radio-row recurrence-end-option">
-                    <input type="radio" name="recurrenceEndMode" value="never" checked />
-                    <span class="recurrence-end-copy">Never</span>
-                  </label>
-                  <label class="radio-row recurrence-end-option recurrence-end-option-inline">
-                    <input type="radio" name="recurrenceEndMode" value="after_n_occurrences" />
-                    <span class="recurrence-end-copy">After</span>
+                  <div class="end-mode-buttons">
+                    <label class="end-mode-btn"><input type="radio" name="recurrenceEndMode" value="never" checked /><span>Never</span></label>
+                    <label class="end-mode-btn"><input type="radio" name="recurrenceEndMode" value="after_n_occurrences" /><span>After N</span></label>
+                    <label class="end-mode-btn"><input type="radio" name="recurrenceEndMode" value="on_date" /><span>On date</span></label>
+                  </div>
+                  <div class="end-mode-detail" data-mode="after_n_occurrences">
                     <input type="number" name="recurrenceOccurrenceCount" value="10" min="1" class="inline-number" />
                     <span class="recurrence-end-copy">occurrences</span>
-                  </label>
-                  <label class="radio-row recurrence-end-option recurrence-end-option-inline">
-                    <input type="radio" name="recurrenceEndMode" value="on_date" />
-                    <span class="recurrence-end-copy">On</span>
+                  </div>
+                  <div class="end-mode-detail" data-mode="on_date">
                     <input type="date" name="recurrenceEndDate" class="inline-date" />
-                  </label>
+                  </div>
                 </fieldset>
               </div>
             </div>
@@ -1263,23 +1260,20 @@ async function renderJobSchedulePage(jobId) {
                 </div>
               </div>
             </div>
-            <fieldset class="stack-gap-sm recurrence-ends-fieldset">
+            <fieldset class="recurrence-ends-fieldset">
               <legend>Ends</legend>
-              <label class="radio-row recurrence-end-option">
-                <input type="radio" name="recurrenceEndMode" value="never" checked />
-                <span class="recurrence-end-copy">Never</span>
-              </label>
-              <label class="radio-row recurrence-end-option recurrence-end-option-inline">
-                <input type="radio" name="recurrenceEndMode" value="after_n_occurrences" />
-                <span class="recurrence-end-copy">After</span>
+              <div class="end-mode-buttons">
+                <label class="end-mode-btn"><input type="radio" name="recurrenceEndMode" value="never" checked /><span>Never</span></label>
+                <label class="end-mode-btn"><input type="radio" name="recurrenceEndMode" value="after_n_occurrences" /><span>After N</span></label>
+                <label class="end-mode-btn"><input type="radio" name="recurrenceEndMode" value="on_date" /><span>On date</span></label>
+              </div>
+              <div class="end-mode-detail" data-mode="after_n_occurrences">
                 <input type="number" name="recurrenceOccurrenceCount" value="10" min="1" class="inline-number" />
                 <span class="recurrence-end-copy">occurrences</span>
-              </label>
-              <label class="radio-row recurrence-end-option recurrence-end-option-inline">
-                <input type="radio" name="recurrenceEndMode" value="on_date" />
-                <span class="recurrence-end-copy">On</span>
+              </div>
+              <div class="end-mode-detail" data-mode="on_date">
                 <input type="date" name="recurrenceEndDate" class="inline-date" />
-              </label>
+              </div>
             </fieldset>
           </div>
           <div class="profile-grid">
@@ -1609,6 +1603,9 @@ async function renderSchedulerPage() {
   const filter = params.get('filter') || '';
   const scale = normalizeDayScale(params.get('scale'));
   const range = viewRange(view, date);
+  // Extend materialization horizons for never-ending series (fire and forget)
+  api.extendHorizons().catch(() => {});
+
   const [schedule, unscheduledJobs] = await Promise.all([
     api.getScheduleRange(range.startDate, range.endDate),
     api.listJobs({ scheduleState: 'unscheduled' }),
@@ -2823,9 +2820,10 @@ function compareJobs(left, right) {
 
 function renderDayEventCard(job, { startHour, slotHeight, slotMinutes, totalMinutes }) {
   const recurringIcon = job.isRecurring ? '<span class="recurring-icon" title="Recurring">&#x1f501;</span>' : '';
-  const startParts = localTimePartsFromIso(job.scheduledStartAt);
+  const startParts = localDateTimePartsFromIso(job.scheduledStartAt);
+  const endParts = localDateTimePartsFromIso(job.scheduledEndAt);
   const minutesFromStart = Math.max(0, ((startParts.hour - startHour) * 60) + startParts.minute);
-  const durationMinutes = Math.max(15, getJobDurationMinutes(job));
+  const durationMinutes = Math.max(15, getLocalDurationMinutes(job.scheduledStartAt, job.scheduledEndAt));
   const top = (minutesFromStart / slotMinutes) * slotHeight;
   const height = Math.max(slotHeight, (durationMinutes / slotMinutes) * slotHeight);
   const clampedHeight = Math.max(slotHeight, Math.min(height, ((totalMinutes - minutesFromStart) / slotMinutes) * slotHeight));
@@ -2892,11 +2890,25 @@ function renderCurrentTimeLine(date, visibleHours, laneCount, slotHeight = 24, s
   return `<div class="calendar-now-line" style="top:${top}px; left:76px; width:calc(100% - 76px);"><span class="calendar-now-dot"></span></div>`;
 }
 
-function localTimePartsFromIso(iso) {
+function localDateTimePartsFromIso(iso) {
   const local = toDateTimeLocal(iso);
-  const timePart = local.split('T')[1] || '00:00';
+  const [datePart = '', timePart = '00:00'] = local.split('T');
   const [hour, minute] = timePart.split(':').map((value) => Number(value || 0));
-  return { hour, minute };
+  return { datePart, hour, minute };
+}
+
+function getLocalDurationMinutes(startIso, endIso) {
+  if (!startIso || !endIso) return 60;
+  const start = localDateTimePartsFromIso(startIso);
+  const end = localDateTimePartsFromIso(endIso);
+  const startDay = start.datePart ? new Date(`${start.datePart}T00:00`) : null;
+  const endDay = end.datePart ? new Date(`${end.datePart}T00:00`) : null;
+  const dayOffsetMinutes = startDay && endDay
+    ? Math.round((endDay.getTime() - startDay.getTime()) / 60000)
+    : 0;
+  const minuteDelta = ((end.hour * 60) + end.minute) - ((start.hour * 60) + start.minute);
+  const total = dayOffsetMinutes + minuteDelta;
+  return Number.isFinite(total) && total > 0 ? total : getJobDurationMinutes({ scheduledStartAt: startIso, scheduledEndAt: endIso });
 }
 
 function deriveInitials(displayName) {
@@ -3042,23 +3054,20 @@ async function renderNewRecurringJobPage() {
               </div>
             </div>
           </div>
-          <fieldset class="stack-gap-sm recurrence-ends-fieldset">
+          <fieldset class="recurrence-ends-fieldset">
             <legend>Ends</legend>
-            <label class="radio-row recurrence-end-option">
-              <input type="radio" name="recurrenceEndMode" value="never" checked />
-              <span class="recurrence-end-copy">Never</span>
-            </label>
-            <label class="radio-row recurrence-end-option recurrence-end-option-inline">
-              <input type="radio" name="recurrenceEndMode" value="after_n_occurrences" />
-              <span class="recurrence-end-copy">After</span>
+            <div class="end-mode-buttons">
+              <label class="end-mode-btn"><input type="radio" name="recurrenceEndMode" value="never" checked /><span>Never</span></label>
+              <label class="end-mode-btn"><input type="radio" name="recurrenceEndMode" value="after_n_occurrences" /><span>After N</span></label>
+              <label class="end-mode-btn"><input type="radio" name="recurrenceEndMode" value="on_date" /><span>On date</span></label>
+            </div>
+            <div class="end-mode-detail" data-mode="after_n_occurrences">
               <input type="number" name="recurrenceOccurrenceCount" value="10" min="1" class="inline-number" />
               <span class="recurrence-end-copy">occurrences</span>
-            </label>
-            <label class="radio-row recurrence-end-option recurrence-end-option-inline">
-              <input type="radio" name="recurrenceEndMode" value="on_date" />
-              <span class="recurrence-end-copy">On</span>
+            </div>
+            <div class="end-mode-detail" data-mode="on_date">
               <input type="date" name="recurrenceEndDate" class="inline-date" />
-            </label>
+            </div>
           </fieldset>
         </div>
 
@@ -3613,23 +3622,20 @@ function openEditJobModalWithScope(job, customer, seriesInfo, scope) {
                 </div>
               </div>
             </div>
-            <fieldset class="stack-gap-sm recurrence-ends-fieldset">
+            <fieldset class="recurrence-ends-fieldset">
               <legend>Ends</legend>
-              <label class="radio-row recurrence-end-option">
-                <input type="radio" name="recurrenceEndMode" value="never" checked />
-                <span class="recurrence-end-copy">Never</span>
-              </label>
-              <label class="radio-row recurrence-end-option recurrence-end-option-inline">
-                <input type="radio" name="recurrenceEndMode" value="after_n_occurrences" />
-                <span class="recurrence-end-copy">After</span>
+              <div class="end-mode-buttons">
+                <label class="end-mode-btn"><input type="radio" name="recurrenceEndMode" value="never" checked /><span>Never</span></label>
+                <label class="end-mode-btn"><input type="radio" name="recurrenceEndMode" value="after_n_occurrences" /><span>After N</span></label>
+                <label class="end-mode-btn"><input type="radio" name="recurrenceEndMode" value="on_date" /><span>On date</span></label>
+              </div>
+              <div class="end-mode-detail" data-mode="after_n_occurrences">
                 <input type="number" name="recurrenceOccurrenceCount" value="10" min="1" class="inline-number" />
                 <span class="recurrence-end-copy">occurrences</span>
-              </label>
-              <label class="radio-row recurrence-end-option recurrence-end-option-inline">
-                <input type="radio" name="recurrenceEndMode" value="on_date" />
-                <span class="recurrence-end-copy">On</span>
+              </div>
+              <div class="end-mode-detail" data-mode="on_date">
                 <input type="date" name="recurrenceEndDate" class="inline-date" />
-              </label>
+              </div>
             </fieldset>
           </div>
         </div>
