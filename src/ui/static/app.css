@@ -1830,6 +1830,20 @@ button {
   cursor: pointer;
 }
 
+.recurrence-choice-pill {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #fff;
+}
+
+.recurrence-summary-card {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
+}
+
 .chip-toggle input[type="checkbox"] {
   position: absolute;
   opacity: 0;
@@ -1838,14 +1852,19 @@ button {
 }
 
 .chip-toggle span {
-  display: inline-block;
-  padding: 4px 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 38px;
+  min-height: 38px;
+  padding: 0 10px;
   border-radius: 999px;
   border: 1px solid var(--border);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   transition: background 0.15s, color 0.15s;
   user-select: none;
+  background: white;
 }
 
 .chip-toggle input:checked + span {
@@ -1859,6 +1878,12 @@ button {
   align-items: center;
   gap: 8px;
   font-size: 14px;
+}
+
+.recurrence-choice-pill:has(input:checked) {
+  border-color: var(--primary);
+  background: #eef4ff;
+  color: #1d4ed8;
 }
 
 .inline-number,
