@@ -2012,12 +2012,10 @@ function renderLaneFilterOptions(schedule, selectedLaneIds = []) {
   const active = selectedLaneIds.length ? new Set(selectedLaneIds) : new Set(schedule.lanes.map((lane) => lane.id));
 
   return schedule.lanes.map((lane) => `
-    <label class="lane-filter-row">
-      <span class="lane-filter-main">
-        <input type="checkbox" name="lane" value="${lane.id}" ${active.has(lane.id) ? 'checked' : ''} />
-        <span class="team-color-dot" style="background:${escapeHtml(lane.color || '#5b7cff')}"></span>
-        <span>${escapeHtml(lane.label)}</span>
-      </span>
+    <label class="lane-filter-row lane-filter-row-inline">
+      <input type="checkbox" name="lane" value="${lane.id}" ${active.has(lane.id) ? 'checked' : ''} />
+      <span class="team-color-dot" style="background:${escapeHtml(lane.color || '#5b7cff')}"></span>
+      <span class="lane-filter-label">${escapeHtml(lane.label)}</span>
       <strong>${counts.get(lane.id) || 0}</strong>
     </label>
   `).join('');

@@ -1814,7 +1814,7 @@ button {
 }
 
 .lane-filter-list-compact {
-  gap: 6px;
+  gap: 4px;
 }
 
 .lane-filter-row {
@@ -1825,9 +1825,26 @@ button {
   font-size: 12px;
 }
 
+.lane-filter-row-inline {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+}
+
 .lane-filter-row strong {
   font-size: 11px;
   color: var(--text-muted);
+}
+
+.lane-filter-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .lane-filter-main {
@@ -1841,8 +1858,10 @@ button {
   white-space: nowrap;
 }
 
+.lane-filter-row input,
 .lane-filter-main input {
   width: auto;
+  margin: 0;
   transform: scale(0.9);
 }
 
