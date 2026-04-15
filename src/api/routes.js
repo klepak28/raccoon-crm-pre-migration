@@ -15,7 +15,7 @@ import {
 } from '../validation/recurring-jobs/recurring-job-input.validator.js';
 
 function renderAppShell(title) {
-  const assetVersion = '20260415d';
+  const assetVersion = '20260415e';
   return `<!doctype html>
 <html>
   <head>

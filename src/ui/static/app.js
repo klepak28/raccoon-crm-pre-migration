@@ -38,6 +38,7 @@ const state = {
   teamMembers: [],
   flash: consumeFlash(),
   globalNewMenuCleanup: null,
+  schedulerFilterCleanup: null,
 };
 
 boot().catch(renderFatal);
@@ -103,6 +104,9 @@ function renderShell({ title, subtitle = '', nav = 'customers', breadcrumbs = []
   const flashHtml = state.flash ? statusMessage(state.flash.message, state.flash.tone) : '';
   state.flash = null;
   const globalNewJobHref = buildGlobalNewJobHref();
+
+  state.schedulerFilterCleanup?.();
+  state.schedulerFilterCleanup = null;
 
   app.innerHTML = `
     <div class="shell">
@@ -233,6 +237,58 @@ function bindGlobalNewMenu() {
   }
 
   state.globalNewMenuCleanup = () => {
+    document.removeEventListener('click', handleDocumentClick);
+    document.removeEventListener('keydown', handleDocumentKeydown);
+  };
+}
+
+function bindSchedulerFilterMenu({ view, date, filter, selectedLaneIds, scale }) {
+  const toggle = document.getElementById('scheduler-filter-toggle');
+  const panel = document.getElementById('scheduler-filter-panel');
+  const form = document.getElementById('scheduler-filter-menu-form');
+  const resetButton = document.getElementById('scheduler-filter-reset');
+  if (!toggle || !panel || !form || !resetButton) return;
+
+  state.schedulerFilterCleanup?.();
+
+  panel.hidden = true;
+
+  const hidePanel = () => {
+    panel.hidden = true;
+  };
+
+  toggle.addEventListener('click', (event) => {
+    event.stopPropagation();
+    panel.hidden = !panel.hidden;
+    if (!panel.hidden) {
+      form.elements.filter?.focus();
+      form.elements.filter?.select?.();
+    }
+  });
+
+  panel.addEventListener('click', (event) => {
+    event.stopPropagation();
+  });
+
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const values = new FormData(event.currentTarget);
+    location.href = buildSchedulerUrl({ view, date, filter: values.get('filter'), lanes: selectedLaneIds, scale });
+  });
+
+  resetButton.addEventListener('click', () => {
+    location.href = buildSchedulerUrl({ view, date, lanes: selectedLaneIds, scale });
+  });
+
+  const handleDocumentClick = () => hidePanel();
+  const handleDocumentKeydown = (event) => {
+    if (event.key === 'Escape') hidePanel();
+  };
+
+  document.addEventListener('click', handleDocumentClick);
+  document.addEventListener('keydown', handleDocumentKeydown);
+
+  state.schedulerFilterCleanup = () => {
     document.removeEventListener('click', handleDocumentClick);
     document.removeEventListener('keydown', handleDocumentKeydown);
   };
@@ -1632,36 +1688,34 @@ async function renderSchedulerPage() {
             <a class="icon-button scheduler-nav-arrow" href="${buildSchedulerUrl({ view, date: stepAnchorDay(view, date, 1), filter, lanes: selectedLaneIds, scale })}" aria-label="Next">&#x203A;</a>
             <input id="scheduler-date-picker" class="scheduler-date-picker" type="date" value="${escapeHtml(date)}" aria-label="Focus date" />
           </div>
-          <div class="view-switcher view-switcher-strong scheduler-view-switcher-inline">
-            ${schedulerViewButton('day', view, date, filter, selectedLaneIds, scale)}
-            ${schedulerViewButton('week', view, date, filter, selectedLaneIds, scale)}
-            ${schedulerViewButton('month', view, date, filter, selectedLaneIds, scale)}
+          <div class="scheduler-toolbar-right-cluster">
+            <div class="scheduler-filter-shell">
+              <button type="button" class="button button-ghost scheduler-filter-toggle ${filter ? 'is-active' : ''}" id="scheduler-filter-toggle">Filter</button>
+              <div class="scheduler-filter-panel" id="scheduler-filter-panel" hidden>
+                <form id="scheduler-filter-menu-form" class="stack-gap compact-form">
+                  <label>
+                    <span>Search</span>
+                    <input name="filter" value="${escapeHtml(filter)}" placeholder="Customer, service, or tag" aria-label="Filter jobs" />
+                  </label>
+                  <div class="inline-actions scheduler-filter-actions">
+                    <button class="button button-primary" type="submit">Apply</button>
+                    <button class="button button-ghost" type="button" id="scheduler-filter-reset">Reset</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+            <div class="view-switcher view-switcher-strong scheduler-view-switcher-inline">
+              ${schedulerViewButton('day', view, date, filter, selectedLaneIds, scale)}
+              ${schedulerViewButton('week', view, date, filter, selectedLaneIds, scale)}
+              ${schedulerViewButton('month', view, date, filter, selectedLaneIds, scale)}
+            </div>
           </div>
         </div>
         <div class="scheduler-layout">
           <aside class="scheduler-rail">
-            <div class="rail-card stack-gap">
-              <div class="rail-card-head"><h2 class="section-title">${escapeHtml(formatRangeLabel('month', date))}</h2></div>
-              ${renderMiniMonthRail({ view, date, filter, selectedLaneIds, scale })}
-            </div>
-            <div class="rail-card stack-gap">
-              <div class="rail-card-head"><h2 class="section-title">Filter</h2></div>
-              <form id="scheduler-filter-form" class="stack-gap compact-form">
-                <label>
-                  <input name="filter" value="${escapeHtml(filter)}" placeholder="Customer, service, or tag" aria-label="Filter jobs" />
-                </label>
-                <input type="hidden" name="view" value="${escapeHtml(view)}" />
-                <input type="hidden" name="date" value="${escapeHtml(date)}" />
-                <div class="inline-actions">
-                  <button class="button button-primary" type="submit">Apply</button>
-                  ${filter ? `<a class="button button-ghost" href="${buildSchedulerUrl({ view, date, lanes: selectedLaneIds, scale })}">Clear</a>` : ''}
-                </div>
-              </form>
-            </div>
-            <div class="rail-card stack-gap">
-              <div class="rail-card-head"><h2 class="section-title">Teams</h2></div>
-              <a class="button button-small button-ghost" href="/app/settings">Manage teams</a>
-              <form id="scheduler-lane-filter-form" class="stack-gap compact-form">
+            <div class="rail-card stack-gap rail-card-compact">
+              <div class="rail-card-head"><h2 class="section-title">Teams</h2><a class="table-meta" href="/app/settings">Manage</a></div>
+              <form id="scheduler-lane-filter-form" class="stack-gap compact-form lane-filter-list-compact">
                 ${renderLaneFilterOptions(schedule, selectedLaneIds)}
               </form>
             </div>
@@ -1715,11 +1769,7 @@ async function renderSchedulerPage() {
     location.href = buildSchedulerUrl({ view, date: nextDate, filter, lanes: selectedLaneIds, scale });
   });
 
-  document.getElementById('scheduler-filter-form').addEventListener('submit', (event) => {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    location.href = buildSchedulerUrl({ view: form.get('view'), date: form.get('date'), filter: form.get('filter'), lanes: selectedLaneIds, scale });
-  });
+  bindSchedulerFilterMenu({ view, date, filter, selectedLaneIds, scale });
 
   document.getElementById('scheduler-lane-filter-form').addEventListener('change', (event) => {
     const form = new FormData(event.currentTarget);
@@ -2821,12 +2871,12 @@ function normalizeDayScale(scale) {
 function getDayScaleConfig(scale) {
   const normalized = normalizeDayScale(scale);
   switch (normalized) {
-    case '60': return { slotMinutes: 60, slotHeight: 42 };
-    case '30': return { slotMinutes: 30, slotHeight: 21 };
-    case '10': return { slotMinutes: 10, slotHeight: 8 };
+    case '60': return { slotMinutes: 60, slotHeight: 52 };
+    case '30': return { slotMinutes: 30, slotHeight: 26 };
+    case '10': return { slotMinutes: 10, slotHeight: 10 };
     case '15':
     default:
-      return { slotMinutes: 15, slotHeight: 12 };
+      return { slotMinutes: 15, slotHeight: 15 };
   }
 }
 
