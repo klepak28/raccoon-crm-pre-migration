@@ -277,6 +277,68 @@ test('schedule range query supports calendar views across multiple days', async 
   });
 });
 
+test('recurring job can be created from scratch and appears on future schedule dates', async () => {
+  const context = createContext();
+  const app = createApp({ staticRoot, context });
+
+  await withServer(app, async (baseUrl) => {
+    const teamMember = await createTeamMember(baseUrl, { displayName: 'Recurring Team', color: '#7c3aed' });
+    const customerResponse = await fetch(`${baseUrl}/api/customers`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        displayName: 'Recurring Flow Customer',
+        customerType: 'Homeowner',
+        street: '1 Main',
+        city: 'Austin',
+        state: 'TX',
+        zip: '73301',
+      }),
+    });
+    const customerPayload = await customerResponse.json();
+    const customerId = customerPayload.item.id;
+    const addressId = customerPayload.item.addresses[0].id;
+
+    const recurringResponse = await fetch(`${baseUrl}/api/recurring-jobs`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        customerId,
+        job: {
+          titleOrServiceSummary: 'Weekly cleaning',
+          customerAddressId: addressId,
+          privateNotes: 'Recurring create-from-scratch path',
+        },
+        schedule: {
+          scheduledStartAt: '2026-04-15T09:00:00.000Z',
+          scheduledEndAt: '2026-04-15T10:00:00.000Z',
+          assigneeTeamMemberId: teamMember.id,
+        },
+        recurrence: {
+          recurrenceFrequency: 'weekly',
+          recurrenceInterval: 1,
+          recurrenceDayOfWeek: ['WED'],
+          recurrenceEndMode: 'after_n_occurrences',
+          recurrenceOccurrenceCount: 3,
+        },
+      }),
+    });
+    const recurringPayload = await recurringResponse.json();
+
+    assert.equal(recurringResponse.status, 201);
+    assert.equal(recurringPayload.item.generatedCount, 2);
+    assert.equal(recurringPayload.item.sourceJob.assigneeTeamMemberId, teamMember.id);
+
+    const scheduleResponse = await fetch(`${baseUrl}/api/schedule/range?startDate=2026-04-15&endDate=2026-04-29`);
+    const schedulePayload = await scheduleResponse.json();
+    const recurringJobs = schedulePayload.item.jobs.filter((job) => job.recurringSeriesId === recurringPayload.item.series.id);
+
+    assert.equal(recurringJobs.length, 3);
+    assert.equal(recurringJobs.every((job) => job.assigneeTeamMemberId === teamMember.id), true);
+    assert.deepEqual(recurringJobs.map((job) => job.scheduledStartAt.slice(0, 10)), ['2026-04-15', '2026-04-22', '2026-04-29']);
+  });
+});
+
 test('operational job list supports unscheduled queue and preserves assignee after unschedule', async () => {
   const context = createContext();
   const app = createApp({ staticRoot, context });

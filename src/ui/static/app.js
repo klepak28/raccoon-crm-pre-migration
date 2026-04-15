@@ -808,6 +808,7 @@ async function renderNewJobPage() {
               <label><input type="checkbox" name="skipSchedule" /> Create unscheduled</label>
               <label><input type="checkbox" name="notifyCustomer" ${customer.sendNotifications ? 'checked' : ''} disabled /> Notify customer</label>
             </div>
+            <div id="recurrence-context-note" class="table-meta" hidden></div>
             <label>
               <span>Edit team</span>
               <select name="teamMemberId">
@@ -2996,6 +2997,8 @@ function bindRecurrenceControls() {
   const dayOfMonthSection = document.getElementById('recurrence-day-of-month-section');
   const ordinalSection = document.getElementById('recurrence-ordinal-section');
   const startInput = document.querySelector('[name="scheduledStartAt"]');
+  const skipScheduleInput = document.querySelector('[name="skipSchedule"]');
+  const recurrenceContextNote = document.getElementById('recurrence-context-note');
 
   function syncEnabled() {
     if (!recurrenceShell || recurrenceEnabledInputs.length === 0) return;
@@ -3003,6 +3006,16 @@ function bindRecurrenceControls() {
     recurrenceShell.hidden = !enabled;
     if (enabled && preset.value === 'none') {
       preset.value = 'custom';
+    }
+    if (skipScheduleInput) {
+      skipScheduleInput.disabled = enabled;
+      if (enabled) skipScheduleInput.checked = false;
+    }
+    if (recurrenceContextNote) {
+      recurrenceContextNote.hidden = !enabled;
+      recurrenceContextNote.textContent = enabled
+        ? 'Recurring jobs must be scheduled when they are created, so "Create unscheduled" is turned off while recurring is enabled.'
+        : '';
     }
     if (enabled) {
       ensureRecurringDefaults();
