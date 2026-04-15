@@ -1646,30 +1646,6 @@ async function renderSchedulerPage() {
           </div>
           <div class="inline-actions scheduler-toolbar-right">
             <button class="button button-ghost" type="button" data-shell-action="color by employee">Color by: Employee</button>
-            ${view === 'day' ? `
-            <form id="scheduler-scale-form" class="inline-actions compact-form scheduler-scale-form">
-              <label>
-                <span class="label-inline">Scale</span>
-                <select name="scale">
-                  ${['60','30','15','10'].map((option) => `<option value="${option}" ${scale === option ? 'selected' : ''}>${option}m</option>`).join('')}
-                </select>
-              </label>
-              <input type="hidden" name="view" value="${escapeHtml(view)}" />
-              <input type="hidden" name="date" value="${escapeHtml(date)}" />
-              <input type="hidden" name="filter" value="${escapeHtml(filter)}" />
-            </form>` : ''}
-            <form id="scheduler-view-form" class="inline-actions compact-form scheduler-view-form">
-              <label>
-                <span class="label-inline">View</span>
-                <select name="view">
-                  <option value="day" ${view === 'day' ? 'selected' : ''}>Day</option>
-                  <option value="week" ${view === 'week' ? 'selected' : ''}>Week</option>
-                  <option value="month" ${view === 'month' ? 'selected' : ''}>Month</option>
-                </select>
-              </label>
-              <input type="hidden" name="date" value="${escapeHtml(date)}" />
-              <input type="hidden" name="filter" value="${escapeHtml(filter)}" />
-            </form>
             <form id="scheduler-jump-form" class="inline-actions compact-form scheduler-date-jump">
               <label>
                 <span class="label-inline">Focus date</span>
@@ -1770,20 +1746,10 @@ async function renderSchedulerPage() {
     location.href = buildSchedulerUrl({ view: form.get('view'), date: form.get('date'), filter: form.get('filter'), lanes: selectedLaneIds, scale });
   });
 
-  document.getElementById('scheduler-view-form').addEventListener('change', (event) => {
-    const form = new FormData(event.currentTarget);
-    location.href = buildSchedulerUrl({ view: form.get('view'), date: form.get('date'), filter: form.get('filter'), lanes: selectedLaneIds, scale: form.get('view') === 'day' ? scale : '' });
-  });
-
   document.getElementById('scheduler-filter-form').addEventListener('submit', (event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     location.href = buildSchedulerUrl({ view: form.get('view'), date: form.get('date'), filter: form.get('filter'), lanes: selectedLaneIds, scale });
-  });
-
-  document.getElementById('scheduler-scale-form')?.addEventListener('change', (event) => {
-    const form = new FormData(event.currentTarget);
-    location.href = buildSchedulerUrl({ view: form.get('view'), date: form.get('date'), filter: form.get('filter'), lanes: selectedLaneIds, scale: form.get('scale') });
   });
 
   document.getElementById('scheduler-lane-filter-form').addEventListener('change', (event) => {
