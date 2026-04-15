@@ -137,7 +137,7 @@ button {
   padding: 0 10px 10px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
 }
 
 .page-frame {
@@ -731,16 +731,17 @@ button {
 .scheduler-toolbar-shell {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 14px;
   background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
 }
 
 .scheduler-toolbar-shell-navsplit {
   grid-template-columns: auto 1fr;
+  align-items: center;
 }
 
 .scheduler-date-pill,
@@ -748,23 +749,25 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 42px;
-  padding: 0 16px;
+  min-height: 34px;
+  height: 34px;
+  padding: 0 12px;
   border-radius: 999px;
-  background: #f6f8fd;
+  background: #f7f9fd;
   border: 1px solid var(--border);
-  font-weight: 700;
+  font-weight: 600;
+  line-height: 1;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .scheduler-date-trigger {
-  min-width: 188px;
+  min-width: 156px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .scheduler-toolbar-shell-compact {
-  padding-bottom: 2px;
+  padding-bottom: 0;
 }
 
 .scheduler-toolbar-shell-navonly {
@@ -776,15 +779,16 @@ button {
   display: inline-flex;
   align-items: center;
   justify-self: flex-start;
-  gap: 8px;
+  gap: 6px;
 }
 
 .scheduler-nav-arrow {
-  width: 34px;
-  min-width: 34px;
-  height: 34px;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
   padding: 0;
-  font-size: 20px;
+  font-size: 18px;
   line-height: 1;
 }
 
@@ -799,11 +803,21 @@ button {
 
 .scheduler-view-switcher-inline {
   justify-self: end;
+  align-items: center;
+  gap: 6px;
 }
 
 .scheduler-view-switcher-inline .button {
-  min-height: 34px;
-  padding: 0 12px;
+  min-width: 58px;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.scheduler-view-switcher-inline .button.button-primary {
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.08);
 }
 
 .scheduler-surface {

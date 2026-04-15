@@ -99,7 +99,7 @@ async function renderRoute() {
   });
 }
 
-function renderShell({ title, subtitle = '', nav = 'customers', breadcrumbs = [], actions = '', content = '' }) {
+function renderShell({ title, subtitle = '', nav = 'customers', breadcrumbs = [], actions = '', content = '', showHero = true }) {
   const flashHtml = state.flash ? statusMessage(state.flash.message, state.flash.tone) : '';
   state.flash = null;
   const globalNewJobHref = buildGlobalNewJobHref();
@@ -148,6 +148,7 @@ function renderShell({ title, subtitle = '', nav = 'customers', breadcrumbs = []
         </div>
       </header>
       <main class="main-column">
+        ${showHero ? `
         <header class="page-frame top-frame hero-frame">
           <div class="page-frame-main">
             <div class="breadcrumbs">${breadcrumbs.length ? breadcrumbs.join('<span> / </span>') : ''}</div>
@@ -156,7 +157,7 @@ function renderShell({ title, subtitle = '', nav = 'customers', breadcrumbs = []
             ${subtitle ? `<p class="page-subtitle">${escapeHtml(subtitle)}</p>` : ''}
           </div>
           ${actions ? `<div class="page-actions shell-actions">${actions}</div>` : ''}
-        </header>
+        </header>` : ''}
         ${flashHtml}
         <div id="page-content">${content}</div>
         <div id="modal-root"></div>
@@ -1613,15 +1614,15 @@ async function renderSchedulerPage() {
   const laneFilteredSchedule = filterScheduleByLaneSelection(schedule, selectedLaneIds);
   const filteredSchedule = filterSchedule(laneFilteredSchedule, filter);
   const filteredUnscheduledJobs = filterJobs(unscheduledJobs, filter);
-  const rangeLabel = formatRangeLabel(view, date);
   const summary = summarizeSchedule(filteredSchedule, range.startDate, range.endDate);
 
   renderShell({
     title: 'Scheduler',
-    subtitle: rangeLabel,
+    subtitle: '',
     nav: 'scheduler',
-    breadcrumbs: [escapeHtml('Scheduler')],
+    breadcrumbs: [],
     actions: '',
+    showHero: false,
     content: `
       <section class="surface-card stack-gap-lg scheduler-surface">
         <div class="scheduler-toolbar-shell scheduler-toolbar-shell-compact scheduler-toolbar-shell-navsplit">
