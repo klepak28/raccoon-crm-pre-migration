@@ -3,10 +3,10 @@ import { httpError } from '../../lib/http.js';
 export function createTeamMemberServices({ teamMemberRepository, jobRepository }) {
   return {
     listTeamMembers() {
-      return teamMemberRepository.list().sort((left, right) => left.displayName.localeCompare(right.displayName));
+      return teamMemberRepository.list().sort(compareTeamMembers);
     },
     listActiveTeamMembers() {
-      return teamMemberRepository.listActive().sort((left, right) => left.displayName.localeCompare(right.displayName));
+      return teamMemberRepository.listActive().sort(compareTeamMembers);
     },
     createTeamMember(input) {
       return teamMemberRepository.create(input);
@@ -32,4 +32,11 @@ export function createTeamMemberServices({ teamMemberRepository, jobRepository }
       });
     },
   };
+}
+
+function compareTeamMembers(left, right) {
+  return String(left.displayName || '').localeCompare(String(right.displayName || ''), undefined, {
+    numeric: true,
+    sensitivity: 'base',
+  });
 }

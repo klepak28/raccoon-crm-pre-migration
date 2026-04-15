@@ -16,7 +16,7 @@ export function createSchedulerServices({ jobRepository, customerRepository, tea
 
       const activeTeamMembers = teamMemberRepository
         .listActive()
-        .sort((left, right) => left.displayName.localeCompare(right.displayName));
+        .sort(compareTeamMembers);
 
       const lanes = [
         { id: 'unassigned', label: 'Unassigned', color: '#d6a54c', pseudo: true, jobs: [] },
@@ -56,7 +56,7 @@ export function createSchedulerServices({ jobRepository, customerRepository, tea
         { id: 'unassigned', label: 'Unassigned', color: '#d6a54c', pseudo: true },
         ...teamMemberRepository
           .listActive()
-          .sort((left, right) => left.displayName.localeCompare(right.displayName))
+          .sort(compareTeamMembers)
           .map((member) => ({
             id: member.id,
             label: member.displayName,
@@ -102,4 +102,11 @@ function toScheduleJob(job, customerRepository, teamMemberRepository) {
     occurrenceIndex: job.occurrenceIndex,
     isExceptionInstance: job.isExceptionInstance,
   };
+}
+
+function compareTeamMembers(left, right) {
+  return String(left.displayName || '').localeCompare(String(right.displayName || ''), undefined, {
+    numeric: true,
+    sensitivity: 'base',
+  });
 }

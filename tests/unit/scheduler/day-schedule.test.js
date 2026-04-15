@@ -138,6 +138,22 @@ test('job starting at local midnight does not appear on the previous day', () =>
   assert.equal(prevDay.lanes[0].jobs.some((item) => item.id === job.id), false, 'job at midnight must not appear on previous day');
 });
 
+test('sorts team lanes naturally so Team 2 comes before Team 10', () => {
+  const context = createContext();
+  createTeamMember(context, { displayName: 'Team 10', color: '#ef4444' });
+  createTeamMember(context, { displayName: 'Team 2', color: '#22c55e' });
+  createTeamMember(context, { displayName: 'Team 1', color: '#3b82f6' });
+
+  const daySchedule = context.services.scheduler.getDaySchedule('2026-04-13');
+  assert.deepEqual(
+    daySchedule.lanes.map((lane) => lane.label),
+    ['Unassigned', 'Team 1', 'Team 2', 'Team 10'],
+  );
+
+  const teamMembers = context.services.teamMembers.listTeamMembers();
+  assert.deepEqual(teamMembers.map((team) => team.displayName), ['Team 1', 'Team 2', 'Team 10']);
+});
+
 test('range query returns scheduled jobs with lane metadata for calendar views', () => {
   const context = createContext();
   const customer = createCustomer(context);
