@@ -770,26 +770,30 @@ button {
 }
 
 .scheduler-date-jump {
-  align-items: end;
+  align-items: center;
+}
+
+.scheduler-toolbar-shell-compact {
+  padding-bottom: 2px;
+}
+
+.scheduler-toolbar-shell-compact .scheduler-toolbar-left,
+.scheduler-toolbar-shell-compact .scheduler-toolbar-right {
+  gap: 8px;
+}
+
+.scheduler-toolbar-shell-compact .scheduler-date-pill {
+  padding: 0 12px;
+  height: 34px;
+  font-size: 13px;
+}
+
+.scheduler-toolbar-shell-compact .scheduler-date-jump input[type="date"] {
+  min-height: 34px;
 }
 
 .scheduler-surface {
-  gap: 22px;
-}
-
-.scheduler-context-bar {
-  display: flex;
-  justify-content: space-between;
   gap: 14px;
-  align-items: start;
-  padding: 14px 16px;
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  background: linear-gradient(180deg, #f8fbff 0%, #f1f5ff 100%);
-}
-
-.scheduler-context-bar-strong {
-  background: linear-gradient(180deg, #f8fbff 0%, #edf3ff 100%);
 }
 
 .context-primary,
@@ -849,50 +853,37 @@ button {
 
 .scheduler-layout {
   display: grid;
-  grid-template-columns: 276px minmax(0, 1fr);
-  gap: 14px;
+  grid-template-columns: 232px minmax(0, 1fr);
+  gap: 10px;
   align-items: start;
 }
 
 .scheduler-rail {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
 }
 
 .rail-card {
-  padding: 16px;
+  padding: 12px;
   background: var(--panel-muted);
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: 14px;
 }
 
 .rail-card-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 10px;
-}
-
-.rail-card-kicker {
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.rail-focus-date {
-  font-weight: 700;
-  font-size: 16px;
+  gap: 8px;
 }
 
 .range-guide-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 12px;
-  border-radius: 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
   background: white;
   border: 1px solid var(--border);
   color: var(--text);
@@ -912,7 +903,7 @@ button {
 .calendar-day-grid-shell {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
 }
 
 .calendar-day-grid-wrap {
@@ -922,9 +913,9 @@ button {
 
 .calendar-day-board {
   display: grid;
-  grid-template-columns: 76px repeat(4, minmax(160px, 1fr));
-  grid-template-rows: 60px auto;
-  border-radius: 18px;
+  grid-template-columns: 62px repeat(4, minmax(136px, 1fr));
+  grid-template-rows: 52px auto;
+  border-radius: 14px;
   overflow: visible;
   border: 1px solid var(--border);
   background: white;
@@ -935,8 +926,8 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 60px;
-  padding: 6px 8px;
+  min-width: 50px;
+  padding: 4px 6px;
   border-radius: 999px;
   background: white;
   border: 1px solid var(--border);
@@ -960,7 +951,7 @@ button {
 }
 
 .calendar-corner-cell {
-  min-height: 60px;
+  min-height: 52px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -968,8 +959,8 @@ button {
 }
 
 .calendar-lane-header {
-  min-height: 60px;
-  padding: 8px 10px;
+  min-height: 52px;
+  padding: 6px 8px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -980,8 +971,12 @@ button {
 
 .calendar-lane-header strong {
   display: block;
-  margin-bottom: 1px;
-  font-size: 13px;
+  margin-bottom: 0;
+  font-size: 12px;
+}
+
+.calendar-lane-header .table-meta {
+  font-size: 10px;
 }
 
 .calendar-lane-header.is-unassigned {
@@ -997,9 +992,9 @@ button {
   height: var(--slot-height, 24px);
   box-sizing: border-box;
   border-bottom: 1px solid rgba(194, 208, 226, 0.4);
-  padding: 0 8px;
+  padding: 0 6px;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
 }
 
@@ -1009,9 +1004,9 @@ button {
 
 .calendar-time-tick span {
   position: sticky;
-  top: 68px;
+  top: 58px;
   display: inline-block;
-  transform: translateY(-6px);
+  transform: translateY(-5px);
 }
 
 .calendar-day-column {
@@ -1066,13 +1061,13 @@ button {
 
 .calendar-event {
   position: absolute;
-  left: 6px;
-  right: 6px;
+  left: 4px;
+  right: 4px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 7px 8px;
-  border-radius: 12px;
+  gap: 2px;
+  padding: 5px 6px;
+  border-radius: 10px;
   border: 1px solid color-mix(in srgb, var(--team-color, #5b7cff) 40%, white);
   background: color-mix(in srgb, var(--team-color, #5b7cff) 16%, white);
   color: var(--text);
@@ -1086,17 +1081,17 @@ button {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 8px;
+  gap: 4px;
 }
 
 .calendar-event-chip {
   flex-shrink: 0;
-  padding: 1px 6px;
+  padding: 1px 5px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.72);
   border: 1px solid rgba(255, 255, 255, 0.8);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
 }
 
@@ -1117,18 +1112,21 @@ button {
 
 .calendar-event-time {
   color: #2447ac;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
+  line-height: 1.15;
 }
 
 .calendar-event-title {
   font-weight: 700;
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 1.15;
 }
 
 .calendar-event-meta {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 10px;
+  line-height: 1.15;
 }
 
 .lane-column,
@@ -1149,8 +1147,8 @@ button {
 }
 
 .lane-avatar {
-  min-width: 40px;
-  min-height: 40px;
+  min-width: 30px;
+  min-height: 30px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1165,8 +1163,8 @@ button {
 .month-day-summary {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
-  margin: 8px 0 12px;
+  gap: 10px;
+  margin: 6px 0 8px;
 }
 
 .month-day-summary.has-unassigned {
@@ -1974,26 +1972,55 @@ fieldset.stack-gap-sm legend {
 .recurrence-ends-fieldset {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   background: #fff;
 }
 
-.recurrence-end-option {
-  min-height: 0;
-  padding: 8px 10px;
+.end-mode-buttons {
+  display: flex;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.end-mode-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 5px 8px;
+  font-size: 12px;
+  font-weight: 500;
   background: #fbfcff;
+  border-right: 1px solid var(--border);
+  user-select: none;
+  transition: background 0.1s, color 0.1s;
 }
 
-.recurrence-end-option-inline {
-  flex-wrap: wrap;
-  justify-content: flex-start;
+.end-mode-btn:last-child {
+  border-right: none;
 }
 
-.recurrence-end-option:has(input:checked) {
-  border-color: var(--primary);
-  background: #eef4ff;
+.end-mode-btn input[type="radio"] {
+  display: none;
+}
+
+.end-mode-btn:has(input:checked) {
+  background: var(--primary);
+  color: #fff;
+}
+
+.end-mode-detail {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 2px;
+}
+
+.recurrence-ends-fieldset:has([value="after_n_occurrences"]:checked) .end-mode-detail[data-mode="after_n_occurrences"],
+.recurrence-ends-fieldset:has([value="on_date"]:checked) .end-mode-detail[data-mode="on_date"] {
+  display: flex;
 }
 
 .recurrence-end-copy {

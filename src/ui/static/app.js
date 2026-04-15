@@ -1631,62 +1631,33 @@ async function renderSchedulerPage() {
     `,
     content: `
       <section class="surface-card stack-gap-lg scheduler-surface">
-        <div class="scheduler-toolbar-shell">
+        <div class="scheduler-toolbar-shell scheduler-toolbar-shell-compact">
           <div class="inline-actions scheduler-toolbar-left">
-            <button class="icon-button" type="button" data-shell-action="schedule rail" aria-label="Schedule rail">☰</button>
             <a class="button" href="${buildSchedulerUrl({ view, date: localToday(), filter, lanes: selectedLaneIds, scale })}">Today</a>
-            <button class="button" type="button" data-shell-action="bulk actions">Bulk actions</button>
             <a class="button button-ghost" href="${buildSchedulerUrl({ view, date: stepAnchorDay(view, date, -1), filter, lanes: selectedLaneIds, scale })}">Previous</a>
             <a class="button button-ghost" href="${buildSchedulerUrl({ view, date: stepAnchorDay(view, date, 1), filter, lanes: selectedLaneIds, scale })}">Next</a>
           </div>
-          <div class="inline-actions scheduler-toolbar-center">
-            <div class="scheduler-date-pill">${escapeHtml(formatRangeLabel(view === 'month' ? 'month' : 'day', date))}</div>
-            <button class="icon-button" type="button" data-shell-action="calendar view" aria-label="Calendar view">📅</button>
-            <button class="icon-button" type="button" data-shell-action="map view" aria-label="Map view">📍</button>
-          </div>
           <div class="inline-actions scheduler-toolbar-right">
-            <button class="button button-ghost" type="button" data-shell-action="color by employee">Color by: Employee</button>
+            <div class="scheduler-date-pill">${escapeHtml(formatRangeLabel(view === 'month' ? 'month' : 'day', date))}</div>
             <form id="scheduler-jump-form" class="inline-actions compact-form scheduler-date-jump">
-              <label>
-                <span class="label-inline">Focus date</span>
-                <input type="date" name="date" value="${escapeHtml(date)}" />
-              </label>
+              <input type="date" name="date" value="${escapeHtml(date)}" aria-label="Focus date" />
               <input type="hidden" name="view" value="${escapeHtml(view)}" />
               <input type="hidden" name="filter" value="${escapeHtml(filter)}" />
               <button class="button button-primary" type="submit">Go</button>
             </form>
-            <button class="icon-button" type="button" data-shell-action="scheduler settings" aria-label="Scheduler settings">⚙️</button>
-          </div>
-        </div>
-        <div class="scheduler-context-bar scheduler-context-bar-strong">
-          <div class="context-primary context-primary-strong">
-            <div class="range-pill range-pill-strong">${escapeHtml(shortDayLabel(date))}</div>
-            <div class="context-meta">Focused ${escapeHtml(shortDayLabel(date))} in ${escapeHtml(capitalize(view))} view</div>
-          </div>
-          <div class="context-stats">
-            <div class="context-stat"><span>Jobs in range</span><strong>${summary.totalJobs}</strong></div>
-            <div class="context-stat"><span>Unassigned</span><strong>${summary.unassignedJobs}</strong></div>
-            <div class="context-stat"><span>Active days</span><strong>${summary.daysWithJobs}</strong></div>
           </div>
         </div>
         <div class="scheduler-layout">
           <aside class="scheduler-rail">
             <div class="rail-card stack-gap">
-              <div class="rail-card-head"><h2 class="section-title">${escapeHtml(formatRangeLabel('month', date))}</h2><span class="rail-card-kicker">Mini month</span></div>
+              <div class="rail-card-head"><h2 class="section-title">${escapeHtml(formatRangeLabel('month', date))}</h2></div>
               ${renderMiniMonthRail({ view, date, filter, selectedLaneIds, scale })}
             </div>
             <div class="rail-card stack-gap">
-              <div class="rail-card-head"><h2 class="section-title">Scheduler focus</h2><span class="rail-card-kicker">Live board</span></div>
-              <div class="rail-focus-date">${escapeHtml(formatRangeLabel('day', date))}</div>
-              <div class="rail-copy">Drill into day view, scan the range, or filter by customer, service, or tag.</div>
-              <a class="button button-primary" href="${buildDayUrl(date, filter, selectedLaneIds, scale)}">Open focused day</a>
-            </div>
-            <div class="rail-card stack-gap">
-              <div class="rail-card-head"><h2 class="section-title">Filter by name or tag</h2><span class="rail-card-kicker">Quick search</span></div>
+              <div class="rail-card-head"><h2 class="section-title">Filter</h2></div>
               <form id="scheduler-filter-form" class="stack-gap compact-form">
                 <label>
-                  <span class="label-inline">Filter</span>
-                  <input name="filter" value="${escapeHtml(filter)}" placeholder="Customer, service, or tag" />
+                  <input name="filter" value="${escapeHtml(filter)}" placeholder="Customer, service, or tag" aria-label="Filter jobs" />
                 </label>
                 <input type="hidden" name="view" value="${escapeHtml(view)}" />
                 <input type="hidden" name="date" value="${escapeHtml(date)}" />
@@ -1697,18 +1668,14 @@ async function renderSchedulerPage() {
               </form>
             </div>
             <div class="rail-card stack-gap">
-              <div class="rail-card-head"><h2 class="section-title">Areas</h2><span class="rail-card-kicker">Color by area</span></div>
-              <button class="button button-ghost scheduler-unsupported-pill" type="button" data-shell-action="areas">Area filtering is not supported in V1</button>
-            </div>
-            <div class="rail-card stack-gap">
-              <div class="rail-card-head"><h2 class="section-title">Employees</h2><span class="rail-card-kicker">Team filters</span></div>
+              <div class="rail-card-head"><h2 class="section-title">Teams</h2></div>
               <a class="button button-small button-ghost" href="/app/settings">Manage teams</a>
               <form id="scheduler-lane-filter-form" class="stack-gap compact-form">
                 ${renderLaneFilterOptions(schedule, selectedLaneIds)}
               </form>
             </div>
             <div class="rail-card stack-gap">
-              <h2 class="section-title">Range guide</h2>
+              <h2 class="section-title">Range</h2>
               ${renderRangeGuide(view, date, filteredSchedule, filter, selectedLaneIds, scale)}
             </div>
             <div class="rail-card stack-gap">
@@ -2852,12 +2819,12 @@ function normalizeDayScale(scale) {
 function getDayScaleConfig(scale) {
   const normalized = normalizeDayScale(scale);
   switch (normalized) {
-    case '60': return { slotMinutes: 60, slotHeight: 52 };
-    case '30': return { slotMinutes: 30, slotHeight: 26 };
-    case '10': return { slotMinutes: 10, slotHeight: 10 };
+    case '60': return { slotMinutes: 60, slotHeight: 42 };
+    case '30': return { slotMinutes: 30, slotHeight: 21 };
+    case '10': return { slotMinutes: 10, slotHeight: 8 };
     case '15':
     default:
-      return { slotMinutes: 15, slotHeight: 16 };
+      return { slotMinutes: 15, slotHeight: 12 };
   }
 }
 
