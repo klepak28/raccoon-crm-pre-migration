@@ -15,17 +15,18 @@ import {
 } from '../validation/recurring-jobs/recurring-job-input.validator.js';
 
 function renderAppShell(title) {
+  const assetVersion = '20260415c';
   return `<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${title}</title>
-    <link rel="stylesheet" href="/static/app.css" />
+    <link rel="stylesheet" href="/static/app.css?v=${assetVersion}" />
   </head>
   <body>
     <div id="app"></div>
-    <script type="module" src="/static/app.js"></script>
+    <script type="module" src="/static/app.js?v=${assetVersion}"></script>
   </body>
 </html>`;
 }
@@ -273,6 +274,13 @@ export async function handleRoute({ req, res, url, context }) {
       const result = services.recurringJobs.deleteThisAndFutureOccurrences(occDeleteParams.jobId);
       sendJson(res, 200, { item: result });
     }
+    return true;
+  }
+
+  // POST /api/recurring-series/extend-horizons — extend materialization for never-ending series
+  if (req.method === 'POST' && url.pathname === '/api/recurring-series/extend-horizons') {
+    const result = services.recurringJobs.extendHorizons();
+    sendJson(res, 200, { item: result });
     return true;
   }
 

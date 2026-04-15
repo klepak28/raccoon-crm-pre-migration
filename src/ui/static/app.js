@@ -2821,14 +2821,18 @@ function compareJobs(left, right) {
 function renderDayEventCard(job, { startHour, slotHeight, slotMinutes, totalMinutes }) {
   const recurringIcon = job.isRecurring ? '<span class="recurring-icon" title="Recurring">&#x1f501;</span>' : '';
   const startParts = localDateTimePartsFromIso(job.scheduledStartAt);
-  const endParts = localDateTimePartsFromIso(job.scheduledEndAt);
   const minutesFromStart = Math.max(0, ((startParts.hour - startHour) * 60) + startParts.minute);
   const durationMinutes = Math.max(15, getLocalDurationMinutes(job.scheduledStartAt, job.scheduledEndAt));
   const top = (minutesFromStart / slotMinutes) * slotHeight;
   const height = Math.max(slotHeight, (durationMinutes / slotMinutes) * slotHeight);
   const clampedHeight = Math.max(slotHeight, Math.min(height, ((totalMinutes - minutesFromStart) / slotMinutes) * slotHeight));
+  const styleAttr = buildStyleAttr([
+    colorStyleDeclaration(job.assignmentColor, '--team-color'),
+    `top:${top}px`,
+    `height:${clampedHeight}px`,
+  ]);
   return `
-    <a class="calendar-event draggable-job ${!job.assigneeTeamMemberId ? 'is-unassigned' : ''}" draggable="true" data-calendar-job-id="${job.id}" ${colorStyleAttr(job.assignmentColor, '--team-color')} href="${buildJobUrl(job.id, location.pathname, location.search)}" style="top:${top}px;height:${clampedHeight}px;">
+    <a class="calendar-event draggable-job ${!job.assigneeTeamMemberId ? 'is-unassigned' : ''}" draggable="true" data-calendar-job-id="${job.id}" ${styleAttr} href="${buildJobUrl(job.id, location.pathname, location.search)}">
       <div class="calendar-event-time">${escapeHtml(formatTime(job.scheduledStartAt))} to ${escapeHtml(formatTime(job.scheduledEndAt))} ${recurringIcon}</div>
       <div class="calendar-event-title-row">
         <div class="calendar-event-title">${escapeHtml(job.titleOrServiceSummary)}</div>
@@ -2857,9 +2861,17 @@ function formatHourLabel(hour) {
   return `${normalized}${suffix}`;
 }
 
+function colorStyleDeclaration(color, variableName = '--team-color') {
+  return /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(String(color || '')) ? `${variableName}:${color}` : `${variableName}:#5b7cff`;
+}
+
+function buildStyleAttr(declarations = []) {
+  const safeDeclarations = declarations.filter(Boolean).join(';');
+  return safeDeclarations ? `style="${safeDeclarations}"` : '';
+}
+
 function colorStyleAttr(color, variableName = '--team-color') {
-  const safeColor = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(String(color || '')) ? color : '#5b7cff';
-  return `style="${variableName}:${safeColor}"`;
+  return buildStyleAttr([colorStyleDeclaration(color, variableName)]);
 }
 
 function normalizeDayScale(scale) {
