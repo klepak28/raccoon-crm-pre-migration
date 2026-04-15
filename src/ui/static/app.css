@@ -739,6 +739,10 @@ button {
   background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
 }
 
+.scheduler-toolbar-shell-navsplit {
+  grid-template-columns: auto 1fr;
+}
+
 .scheduler-date-pill,
 .scheduler-date-trigger {
   display: inline-flex;
@@ -754,7 +758,7 @@ button {
 }
 
 .scheduler-date-trigger {
-  min-width: 240px;
+  min-width: 188px;
   cursor: pointer;
   font-size: 13px;
 }
@@ -771,6 +775,7 @@ button {
   position: relative;
   display: inline-flex;
   align-items: center;
+  justify-self: flex-start;
   gap: 8px;
 }
 
@@ -790,6 +795,15 @@ button {
   height: 1px;
   opacity: 0;
   pointer-events: none;
+}
+
+.scheduler-view-switcher-inline {
+  justify-self: end;
+}
+
+.scheduler-view-switcher-inline .button {
+  min-height: 34px;
+  padding: 0 12px;
 }
 
 .scheduler-surface {

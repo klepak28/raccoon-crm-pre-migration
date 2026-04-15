@@ -4,6 +4,7 @@ import {
   formatDateRange,
   formatDateTime,
   formatDayKey,
+  formatCompactDayLabel,
   formatTime,
   localToday,
   listDays,
@@ -154,9 +155,7 @@ function renderShell({ title, subtitle = '', nav = 'customers', breadcrumbs = []
             <h1>${escapeHtml(title)}</h1>
             ${subtitle ? `<p class="page-subtitle">${escapeHtml(subtitle)}</p>` : ''}
           </div>
-          <div class="page-actions shell-actions">
-            ${actions}
-          </div>
+          ${actions ? `<div class="page-actions shell-actions">${actions}</div>` : ''}
         </header>
         ${flashHtml}
         <div id="page-content">${content}</div>
@@ -1622,21 +1621,20 @@ async function renderSchedulerPage() {
     subtitle: rangeLabel,
     nav: 'scheduler',
     breadcrumbs: [escapeHtml('Scheduler')],
-    actions: `
-      <div class="view-switcher view-switcher-strong">
-        ${schedulerViewButton('day', view, date, filter, selectedLaneIds, scale)}
-        ${schedulerViewButton('week', view, date, filter, selectedLaneIds, scale)}
-        ${schedulerViewButton('month', view, date, filter, selectedLaneIds, scale)}
-      </div>
-    `,
+    actions: '',
     content: `
       <section class="surface-card stack-gap-lg scheduler-surface">
-        <div class="scheduler-toolbar-shell scheduler-toolbar-shell-compact scheduler-toolbar-shell-navonly">
+        <div class="scheduler-toolbar-shell scheduler-toolbar-shell-compact scheduler-toolbar-shell-navsplit">
           <div class="scheduler-date-nav-wrap">
             <a class="icon-button scheduler-nav-arrow" href="${buildSchedulerUrl({ view, date: stepAnchorDay(view, date, -1), filter, lanes: selectedLaneIds, scale })}" aria-label="Previous">&#x2039;</a>
-            <button type="button" class="scheduler-date-trigger" id="scheduler-date-trigger">${escapeHtml(formatRangeLabel(view === 'day' ? 'day' : view, date))}</button>
+            <button type="button" class="scheduler-date-trigger" id="scheduler-date-trigger">${escapeHtml(formatCompactDayLabel(date))}</button>
             <a class="icon-button scheduler-nav-arrow" href="${buildSchedulerUrl({ view, date: stepAnchorDay(view, date, 1), filter, lanes: selectedLaneIds, scale })}" aria-label="Next">&#x203A;</a>
             <input id="scheduler-date-picker" class="scheduler-date-picker" type="date" value="${escapeHtml(date)}" aria-label="Focus date" />
+          </div>
+          <div class="view-switcher view-switcher-strong scheduler-view-switcher-inline">
+            ${schedulerViewButton('day', view, date, filter, selectedLaneIds, scale)}
+            ${schedulerViewButton('week', view, date, filter, selectedLaneIds, scale)}
+            ${schedulerViewButton('month', view, date, filter, selectedLaneIds, scale)}
           </div>
         </div>
         <div class="scheduler-layout">

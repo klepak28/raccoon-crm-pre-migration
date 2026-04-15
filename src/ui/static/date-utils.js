@@ -1,6 +1,7 @@
 const weekdayFormatter = new Intl.DateTimeFormat(undefined, { weekday: 'short' });
 const dayFormatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
 const longDayFormatter = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+const compactDayFormatter = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 const timeFormatter = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
 const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
   month: 'short',
@@ -58,6 +59,10 @@ export function monthGridStart(dayKey) {
 
 export function monthGridEnd(dayKey) {
   return endOfWeek(endOfMonth(dayKey));
+}
+
+export function formatCompactDayLabel(anchorDay) {
+  return compactDayFormatter.format(parseDayKey(anchorDay));
 }
 
 export function formatRangeLabel(view, anchorDay) {
