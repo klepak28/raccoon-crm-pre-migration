@@ -1795,64 +1795,85 @@ function renderSchedulerView({ view, date, schedule, filter, lanes = [] }) {
 
 function renderDaySchedulerView(date, schedule, filter, lanes = []) {
   const visibleHours = Array.from({ length: 11 }, (_, index) => index + 7);
-  const jobsByLane = new Map(schedule.lanes.map((lane) => [lane.id, []]));
-  const jobsByLaneAndHour = new Map(schedule.lanes.map((lane) => [
-    lane.id,
-    new Map(visibleHours.map((hour) => [hour, []])),
-  ]));
-  const currentTimeLine = renderCurrentTimeLine(date, visibleHours, schedule.lanes.length);
+  const slotMinutes = 15;
+  const slotHeight = 28;
+  const startHour = visibleHours[0];
+  const totalMinutes = visibleHours.length * 60;
+  const laneJobs = new Map(schedule.lanes.map((lane) => [lane.id, []]));
+  const currentTimeLine = renderCurrentTimeLine(date, visibleHours, schedule.lanes.length, slotHeight);
 
   for (const job of schedule.jobs) {
     if (jobDayKeys(job, date, date).includes(date)) {
       const laneId = job.assigneeTeamMemberId || 'unassigned';
-      jobsByLane.get(laneId)?.push(job);
-      const jobHour = new Date(job.scheduledStartAt).getHours();
-      const clampedHour = Math.min(visibleHours.at(-1), Math.max(visibleHours[0], jobHour));
-      jobsByLaneAndHour.get(laneId)?.get(clampedHour)?.push(job);
+      laneJobs.get(laneId)?.push(job);
+    }
+  }
+
+  const quarterSlots = [];
+  for (const hour of visibleHours) {
+    for (let minute = 0; minute < 60; minute += slotMinutes) {
+      quarterSlots.push({ hour, minute, label: minute === 0 ? formatHourLabel(hour) : '' });
     }
   }
 
   return `
     <div class="calendar-day-grid-shell">
       <div class="calendar-day-grid-wrap">
-      <div class="calendar-day-grid" style="grid-template-columns: 88px repeat(${schedule.lanes.length}, minmax(180px, 1fr));">
-        <div class="calendar-corner-cell">
-          <div class="timezone-pill">GMT-05</div>
-        </div>
-        ${schedule.lanes.map((lane) => {
-          const laneJobs = (jobsByLane.get(lane.id) || []).sort(compareJobs);
-          return `
-            <div class="calendar-lane-header ${lane.id === 'unassigned' ? 'is-unassigned' : ''}" ${colorStyleAttr(lane.color, '--team-color')}>
-              <div>
-                <strong>${escapeHtml(lane.label)}</strong>
-                <div class="table-meta">${laneJobs.length} job${laneJobs.length === 1 ? '' : 's'}</div>
+        <div class="calendar-day-board" style="grid-template-columns: 88px repeat(${schedule.lanes.length}, minmax(180px, 1fr));">
+          <div class="calendar-corner-cell">
+            <div class="timezone-pill">GMT-05</div>
+          </div>
+          ${schedule.lanes.map((lane) => {
+            const jobs = (laneJobs.get(lane.id) || []).sort(compareJobs);
+            return `
+              <div class="calendar-lane-header ${lane.id === 'unassigned' ? 'is-unassigned' : ''}" ${colorStyleAttr(lane.color, '--team-color')}>
+                <div>
+                  <strong>${escapeHtml(lane.label)}</strong>
+                  <div class="table-meta">${jobs.length} job${jobs.length === 1 ? '' : 's'}</div>
+                </div>
+                ${lane.initials ? `<span class="lane-avatar" ${colorStyleAttr(lane.color, '--team-color')}>${escapeHtml(lane.initials)}</span>` : badge('Unassigned', 'warning')}
               </div>
-              ${lane.initials ? `<span class="lane-avatar" ${colorStyleAttr(lane.color, '--team-color')}>${escapeHtml(lane.initials)}</span>` : badge('Unassigned', 'warning')}
-            </div>
-          `;
-        }).join('')}
+            `;
+          }).join('')}
 
-        ${visibleHours.map((hour) => {
-          const row = [`<div class="calendar-hour-cell"><span>${escapeHtml(formatHourLabel(hour))}</span></div>`];
-          for (const lane of schedule.lanes) {
-            const laneJobs = (jobsByLaneAndHour.get(lane.id)?.get(hour) || []).sort(compareJobs);
-            row.push(`
-              <div class="calendar-slot ${lane.id === 'unassigned' ? 'is-unassigned' : ''}" data-calendar-drop-slot data-slot-date="${escapeHtml(date)}" data-slot-hour="${hour}" data-slot-lane-id="${escapeHtml(lane.id)}">
-                ${laneJobs.length
-                  ? laneJobs.map((job) => renderDayEventCard(job)).join('')
-                  : `<button class="calendar-slot-empty" type="button" data-empty-slot data-slot-date="${escapeHtml(date)}" data-slot-hour="${hour}">Create new job</button>`}
+          <div class="calendar-time-axis" style="--slot-height:${slotHeight}px;">
+            ${quarterSlots.map((slot) => `
+              <div class="calendar-time-tick ${slot.minute === 0 ? 'is-hour' : 'is-quarter'}">
+                ${slot.label ? `<span>${escapeHtml(slot.label)}</span>` : ''}
               </div>
-            `);
-          }
-          return row.join('');
-        }).join('')}
-      </div>
-      ${currentTimeLine}
+            `).join('')}
+          </div>
+
+          ${schedule.lanes.map((lane) => {
+            const jobs = (laneJobs.get(lane.id) || []).sort(compareJobs);
+            return `
+              <div class="calendar-day-column ${lane.id === 'unassigned' ? 'is-unassigned' : ''}" style="--slot-height:${slotHeight}px; --day-height:${quarterSlots.length * slotHeight}px;" data-day-column-lane-id="${escapeHtml(lane.id)}">
+                <div class="calendar-slot-grid" style="grid-template-rows: repeat(${quarterSlots.length}, ${slotHeight}px);">
+                  ${quarterSlots.map((slot) => `
+                    <button
+                      class="calendar-slot-segment ${slot.minute === 0 ? 'is-hour' : 'is-quarter'}"
+                      type="button"
+                      data-empty-slot
+                      data-calendar-drop-slot
+                      data-slot-date="${escapeHtml(date)}"
+                      data-slot-hour="${slot.hour}"
+                      data-slot-minute="${slot.minute}"
+                      data-slot-lane-id="${escapeHtml(lane.id)}"
+                    >${slot.minute === 0 ? 'Create new job' : ''}</button>
+                  `).join('')}
+                </div>
+                <div class="calendar-events-layer">
+                  ${jobs.map((job) => renderDayEventCard(job, { startHour, slotHeight, totalMinutes })).join('')}
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+        ${currentTimeLine}
       </div>
       ${schedule.jobs.some((job) => !job.assigneeTeamMemberId)
         ? '<div class="table-meta">Unassigned jobs stay in their own column until a team is selected.</div>'
         : ''}
-      </div>
     </div>
   `;
 }
@@ -2177,8 +2198,8 @@ function bindCalendarCreateActions() {
   for (const button of document.querySelectorAll('[data-empty-slot]')) {
     button.addEventListener('click', (event) => {
       event.preventDefault();
-      const { slotDate, slotHour } = event.currentTarget.dataset;
-      openCalendarCreateMenu({ date: slotDate, hour: Number(slotHour) });
+      const { slotDate, slotHour, slotMinute } = event.currentTarget.dataset;
+      openCalendarCreateMenu({ date: slotDate, hour: Number(slotHour), minute: Number(slotMinute || 0) });
     });
   }
 
@@ -2226,6 +2247,7 @@ function bindCalendarDragAndDrop() {
           jobId,
           date: slot.dataset.slotDate,
           hour: Number(slot.dataset.slotHour),
+          minute: Number(slot.dataset.slotMinute || 0),
           laneId: slot.dataset.slotLaneId,
         });
       } catch (error) {
@@ -2235,10 +2257,10 @@ function bindCalendarDragAndDrop() {
   }
 }
 
-async function moveJobToCalendarSlot({ jobId, date, hour, laneId }) {
+async function moveJobToCalendarSlot({ jobId, date, hour, minute = 0, laneId }) {
   const job = await api.getJob(jobId);
-  const durationMinutes = Math.max(30, getJobDurationMinutes(job));
-  const startLocal = `${date}T${String(hour).padStart(2, '0')}:00`;
+  const durationMinutes = Math.max(15, getJobDurationMinutes(job));
+  const startLocal = `${date}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
   const endLocal = addMinutesToLocalDateTime(startLocal, durationMinutes);
 
   await api.scheduleJob(jobId, {
@@ -2254,12 +2276,12 @@ async function moveJobToCalendarSlot({ jobId, date, hour, laneId }) {
     await api.assignJob(jobId, laneId);
   }
 
-  setFlash(`Job moved to ${shortDayLabel(date)} at ${formatHourLabel(hour)}.`, 'success');
+  setFlash(`Job moved to ${shortDayLabel(date)} at ${formatTime(toIso(startLocal))}.`, 'success');
   await renderRoute();
 }
 
 function clearCalendarDropTargets() {
-  for (const slot of document.querySelectorAll('.calendar-slot.is-drop-target')) {
+  for (const slot of document.querySelectorAll('.calendar-slot-segment.is-drop-target')) {
     slot.classList.remove('is-drop-target');
   }
 }
@@ -2276,10 +2298,9 @@ function addMinutesToLocalDateTime(localDateTime, minutes) {
   return toDateTimeLocal(date.toISOString());
 }
 
-function openCalendarCreateMenu({ date, hour = 9 }) {
-  const start = `${date}T${String(hour).padStart(2, '0')}:00`;
-  const endHour = Math.min(hour + 1, 23);
-  const end = `${date}T${String(endHour).padStart(2, '0')}:00`;
+function openCalendarCreateMenu({ date, hour = 9, minute = 0 }) {
+  const start = `${date}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  const end = addMinutesToLocalDateTime(start, 60);
   const createHref = buildNewJobUrl({ pathname: location.pathname, search: location.search, date, start, end });
 
   openModal({
@@ -2749,10 +2770,17 @@ function compareJobs(left, right) {
   return new Date(left.scheduledStartAt).getTime() - new Date(right.scheduledStartAt).getTime();
 }
 
-function renderDayEventCard(job) {
+function renderDayEventCard(job, { startHour, slotHeight, totalMinutes }) {
   const recurringIcon = job.isRecurring ? '<span class="recurring-icon" title="Recurring">&#x1f501;</span>' : '';
+  const start = new Date(job.scheduledStartAt);
+  const end = new Date(job.scheduledEndAt);
+  const minutesFromStart = Math.max(0, ((start.getHours() - startHour) * 60) + start.getMinutes());
+  const durationMinutes = Math.max(15, Math.round((end.getTime() - start.getTime()) / 60000));
+  const top = (minutesFromStart / 15) * slotHeight;
+  const height = Math.max(slotHeight, (durationMinutes / 15) * slotHeight);
+  const clampedHeight = Math.min(height, ((totalMinutes - minutesFromStart) / 15) * slotHeight);
   return `
-    <a class="calendar-event draggable-job ${!job.assigneeTeamMemberId ? 'is-unassigned' : ''}" draggable="true" data-calendar-job-id="${job.id}" ${colorStyleAttr(job.assignmentColor, '--team-color')} href="${buildJobUrl(job.id, location.pathname, location.search)}">
+    <a class="calendar-event draggable-job ${!job.assigneeTeamMemberId ? 'is-unassigned' : ''}" draggable="true" data-calendar-job-id="${job.id}" ${colorStyleAttr(job.assignmentColor, '--team-color')} href="${buildJobUrl(job.id, location.pathname, location.search)}" style="top:${top}px;height:${clampedHeight}px;">
       <div class="calendar-event-time">${escapeHtml(formatTime(job.scheduledStartAt))} to ${escapeHtml(formatTime(job.scheduledEndAt))} ${recurringIcon}</div>
       <div class="calendar-event-title-row">
         <div class="calendar-event-title">${escapeHtml(job.titleOrServiceSummary)}</div>
@@ -2786,16 +2814,15 @@ function colorStyleAttr(color, variableName = '--team-color') {
   return `style="${variableName}:${safeColor}"`;
 }
 
-function renderCurrentTimeLine(date, visibleHours, laneCount) {
+function renderCurrentTimeLine(date, visibleHours, laneCount, slotHeight = 28) {
   if (date !== localToday()) return '';
   const now = new Date();
   const startHour = visibleHours[0];
   const endHour = visibleHours[visibleHours.length - 1] + 1;
   const hourValue = now.getHours() + (now.getMinutes() / 60);
   if (hourValue < startHour || hourValue > endHour) return '';
-  const rowHeight = 104;
   const headerHeight = 72;
-  const top = headerHeight + ((hourValue - startHour) * rowHeight);
+  const top = headerHeight + (((hourValue - startHour) * 60) / 15) * slotHeight;
   return `<div class="calendar-now-line" style="top:${top}px; left:88px; width:calc(100% - 88px);"><span class="calendar-now-dot"></span></div>`;
 }
 
